@@ -1,0 +1,59 @@
+name: Update and deploy
+
+# Rebuilds coverage.json from Ginkgo's develop branch and status.json from the
+# GitLab and GitHub APIs, then deploys site/ to GitHub Pages. A failed step
+# deploys nothing, so the page keeps the last good data and shows its age.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out Ginkgo develop
+        uses: actions/checkout@v4
+        with:
+          repository: ginkgo-project/ginkgo
+          ref: develop
+          path: ginkgo
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml pytest
+      - name: Tests
+        run: |
+          python -m pytest -q
+          node --test tests/js/
+      - name: Coverage
+        run: python -m extract ginkgo site/coverage.json
+      - name: Job results
+        run: python -m status site/coverage.json site/status.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

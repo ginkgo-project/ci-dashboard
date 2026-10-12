@@ -1,0 +1,10 @@
+# Supported toolchain versions. The minimums come from Ginkgo's README. max is
+# the newest release and is optional; it is set where the CI shows that
+# release exists (2026-10-12). Quote every version.
+
+gcc: {min: "9", max: "16"}
+clang: {min: "5", max: "22"}
+cuda: {min: "11.0", max: "13.3"}
+rocm: {min: "6.2", max: "7.2"}
+oneapi: {min: "2024.1"}
+nvhpc: {min: "22.7"}

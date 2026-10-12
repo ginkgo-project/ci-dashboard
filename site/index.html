@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ginkgo CI dashboard</title>
+<meta name="description" content="What Ginkgo's CI covers and which jobs fail on develop">
+<link rel="icon" type="image/png" href="logo.png">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="https://gko-project.org/">
+    <img src="logo.png" alt="Ginkgo logo" width="40" height="40">
+    <h1>Ginkgo CI dashboard</h1>
+  </a>
+  <div id="meta" class="meta"></div>
+</header>
+<div id="banners"></div>
+<nav id="tabs" class="tabs" aria-label="Views">
+  <a href="#status">Status</a>
+  <a href="#coverage">Coverage</a>
+  <a href="#supported">Supported vs. tested</a>
+</nav>
+<form id="filters" class="filters" aria-label="Filters"></form>
+<main id="view"></main>
+<footer class="foot">
+  Results from the GitLab and GitHub APIs, refreshed every 30 minutes.
+  <a href="https://github.com/ginkgo-project/ci-dashboard">Source</a>
+</footer>
+</body>
+</html>

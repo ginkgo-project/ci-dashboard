@@ -1,0 +1,76 @@
+# The hardware behind the CI runners. Runners and runner labels point to
+# machines; each machine is one column of the coverage grid.
+#
+# Sources: docs.coma-cluster.de/hardware, sinfo on rocinante (2026-10-10), the
+# gitlab-meta-runner config (runner tags, without tokens), and the runner
+# descriptions in GitLab's job records. The meta-runner sends a job to the
+# matching runner with the fewest tags, so nvidia-gpus jobs go to rocinante,
+# never to the L40S node.
+
+columns:
+  - x86-64
+  - arm64
+  - apple-arm64
+  - windows-x86-64
+  - P100
+  - rocinante NVIDIA
+  - L40S
+  - A100
+  - GH200
+  - MI50
+  - MI210
+  - MI250X
+  - MI300A
+  - A770
+  - PVC
+  - compile-only
+
+machines:
+  tum-cpu: {site: TUM, node: develop partition, gpu: null, vendor: cpu, arch: x86-64, column: x86-64}
+  tum-p100: {site: TUM, node: rocinante, gpu: NVIDIA P100 16GB, vendor: nvidia, arch: sm_60, column: P100}
+  # CUDA device 1 in PCI order on rocinante: the A100 40GB or one of the two A2
+  tum-rocinante-nvidia: {site: TUM, node: rocinante, gpu: NVIDIA A100 40GB or A2 16GB, vendor: nvidia, arch: null, column: rocinante NVIDIA}
+  tum-l40s: {site: TUM, node: gpu-nvidia, gpu: NVIDIA L40S 48GB, vendor: nvidia, arch: sm_89, column: L40S}
+  tum-mi50: {site: TUM, node: rocinante, gpu: AMD MI50 16GB, vendor: amd, arch: gfx906, column: MI50}
+  tum-mi210: {site: TUM, node: gpu-amd, gpu: AMD MI210 64GB, vendor: amd, arch: gfx90a, column: MI210}
+  tum-a770: {site: TUM, node: rocinante, gpu: Intel Arc A770 16GB, vendor: intel, arch: xe-hpg, column: A770}
+  tum-pvc: {site: TUM, node: gpu-intel-pvc, gpu: Intel Data Center GPU Max 1100, vendor: intel, arch: xe-hpc, column: PVC}
+  status-runner: {site: null, node: null, gpu: null, vendor: cpu, arch: x86-64, column: x86-64}
+  nla-gpu1: {site: private, node: nla-gpu1, gpu: null, vendor: cpu, arch: x86-64, column: x86-64}
+  horeka-a100: {site: HoreKa, node: dev_accelerated partition, gpu: NVIDIA A100 40GB, vendor: nvidia, arch: sm_80, column: A100}
+  cscs-gh200: {site: CSCS, node: Daint, gpu: NVIDIA GH200, vendor: nvidia, arch: sm_90, column: GH200}
+  cscs-mi300a: {site: CSCS, node: Beverin, gpu: AMD MI300A, vendor: amd, arch: gfx942, column: MI300A}
+  cscs-mi250x: {site: CSCS, node: Beverin, gpu: AMD MI250X, vendor: amd, arch: gfx90a, column: MI250X}
+  github-x86-64: {site: GitHub, node: ubuntu-24.04, gpu: null, vendor: cpu, arch: x86-64, column: x86-64}
+  github-arm64: {site: GitHub, node: ubuntu-24.04-arm, gpu: null, vendor: cpu, arch: arm64, column: arm64}
+  github-macos: {site: GitHub, node: macos-latest, gpu: null, vendor: cpu, arch: apple-arm64, column: apple-arm64}
+  github-windows: {site: GitHub, node: windows, gpu: null, vendor: cpu, arch: x86-64, column: windows-x86-64}
+
+# keyed by the runner description GitLab reports in each job record
+gitlab_runners:
+  ginkgo-cluster-meta-runner-intel: {tags: [intel-gpus, tum], machine: tum-pvc}
+  ginkgo-cluster-meta-runner-intel_a770_rocinante: {tags: [intel-a770-gpu, tum, intel-fp32-gpus], machine: tum-a770}
+  ginkgo-cluster-meta-runner-nvidia_l40s: {tags: [nvidia-gpus, nvidia-gpus-l40s, tum], machine: tum-l40s}
+  ginkgo-cluster-meta-runner-nvidia_rocinante: {tags: [nvidia-gpus, tum], machine: tum-rocinante-nvidia}
+  ginkgo-cluster-meta-runner-nvidia_p100: {tags: [nvidia-gpus-p100, tum], machine: tum-p100}
+  ginkgo-cluster-meta-runner-amd_mi210: {tags: [amd-gpus, amd-gpus-mi210, tum], machine: tum-mi210}
+  ginkgo-cluster-meta-runner-amd_mi50: {tags: [amd-gpus, amd-gpus-mi50, tum], machine: tum-mi50}
+  ginkgo-cluster-meta-runner-cpu: {tags: [tum, cpu], machine: tum-cpu}
+  nla-gpu1: {tags: [controller, cpu, nla-gpu, private_ci, amd-gpu], machine: nla-gpu1}
+  Running small status jobs: {tags: [status-jobs], machine: status-runner}
+  Runner for horeka-ci-controller: {tags: [horeka], machine: horeka-a100}
+
+# templates from CSCS's remote include, which pick the cluster
+gitlab_templates:
+  .baremetal-runner-daint-gh200: cscs-gh200
+  .baremetal-runner-beverin-mi300: cscs-mi300a
+  .baremetal-runner-beverin-mi200: cscs-mi250x
+
+github_runners:
+  ubuntu-24.04: github-x86-64
+  ubuntu-latest: github-x86-64
+  ubuntu-24.04-arm: github-arm64
+  macos-latest: github-macos
+  windows-latest: github-windows
+  windows-2022: github-windows
+  windows-2025: github-windows

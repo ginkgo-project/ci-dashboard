@@ -1,0 +1,27 @@
+# Toolchain versions of environments whose names don't contain them. The
+# extractor prefers module lists (MODULE_LOAD, MODULES), then these entries,
+# then version codes in image and job names. Quote every version: YAML reads
+# 13.10 as 13.1.
+
+images:
+  # system GCC of the TUM Rocky images, for jobs whose MODULE_LOAD has no gcc
+  rocky_tum: {gcc: "11.5"}
+  rocky_tum_intel: {gcc: "11.5"}
+  # CSCS uenvs, from the comments in .gitlab/cscs.yml; the GCC of 26.3 is not known yet
+  "prgenv-gnu/26.3:v1": {cuda: "13.1", cray-mpich: ""}
+  "prgenv-gnu/25.11:v1": {cuda: "12.9", gcc: "14.2", cray-mpich: "8.1.32"}
+  "prgenv-gnu/25.07-6.3.3:v12": {rocm: "6.3.3", gcc: "13.4", cray-mpich: ""}
+
+# the first entry is the runner's C++ compiler; from the CMake output of the
+# jobs on 2026-10-12
+github_runners:
+  ubuntu-24.04: {gcc: "13.3"}
+  ubuntu-24.04-arm: {gcc: "13.3"}
+  macos-latest: {appleclang: "21.0"}
+  windows-latest: {msvc: "19.51"}
+  windows-2022: {msvc: "19.44"}
+
+# versions that nothing else provides, keyed by job key
+jobs:
+  "github:windows-msvc-cuda / msvc/cuda-latest/release/shared (only compile)": {cuda: "13.3"}
+  "github:windows-msvc-mpi / msvc/mpi-latest/release/shared (only compile)": {cuda: "13.3"}
