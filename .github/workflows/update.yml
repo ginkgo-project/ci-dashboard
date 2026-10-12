@@ -37,7 +37,7 @@ jobs:
       - name: Tests
         run: |
           python -m pytest -q
-          node --test tests/js/
+          node --test tests/js/*.test.js
       - name: Coverage
         run: python -m extract ginkgo site/coverage.json
       - name: Job results

@@ -1,4 +1,4 @@
-// Pure functions behind the dashboard page; tested with `node --test tests/js/`.
+// Pure functions behind the dashboard page; tested with `node --test tests/js/*.test.js`.
 
 export const STATUS_ORDER = ["failed", "canceled", "notrun", "pending", "running", "success"];
 export const SETTINGS = ["CI", "site", "machine", "kind", "pipeline", "build type", "linkage", "MPI", "OpenMP", "precision", "toolchain"];
