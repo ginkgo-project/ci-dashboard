@@ -172,7 +172,7 @@ function renderCoverage(root) {
 function renderSupported(root) {
   root.append(el("p", { class: "legend" },
     "Filled: tests run on hardware. Hollow: compiled only. Red: the latest result failed. Versions outside the supported range sit outside the line."));
-  for (const line of supportedLines(state.coverage, state.status)) {
+  for (const line of supportedLines(state.coverage, state.status, state.filters)) {
     const mark = (t) => el("span", {
       class: ["mark", t.hardware ? "hw" : "compile", t.failed && "failed"].filter(Boolean).join(" "),
       title: `${line.name} ${t.version}: ${t.hardware ? "tested on hardware" : "compiled only"}${t.failed ? ", failing" : ""}`,

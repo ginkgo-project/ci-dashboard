@@ -63,8 +63,8 @@ GitLab API, GitHub API -------> status ----> site/status.json ----+
   - **Supported vs. tested:** for each toolchain, the tested versions against
     the supported range.
 
-  The Status and Coverage views can be filtered by CI, site, machine,
-  pipeline, build options and result.
+  All three views can be filtered by CI, site, machine, pipeline, build
+  options and result.
 
 `.github/workflows/update.yml` runs the tests, both scripts and the deployment
 to GitHub Pages every 30 minutes, on pushes to `main` and by hand.

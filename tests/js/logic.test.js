@@ -148,6 +148,14 @@ test("supportedLines marks tested versions", () => {
   assert.deepEqual(low.tested.map((t) => [t.version, t.below, t.above]), [["9", true, false], ["12", false, false], ["13", false, true]]);
 });
 
+test("supportedLines only counts the jobs that match the filters", () => {
+  const versions = (filters) => logic.supportedLines(coverage, status, filters).map((line) => line.tested.map((t) => t.version));
+  assert.deepEqual(versions({ site: "GitHub" }), [["13"], ["13.3"]]);
+  assert.deepEqual(versions({ status: "failed" }), [["12"], ["12.0"]]);
+  // a toolchain without matching jobs keeps its line, with nothing tested
+  assert.deepEqual(versions({ site: "CSCS" }), [["12"], []]);
+});
+
 test("small helpers", () => {
   const now = new Date("2026-10-12T09:00:00Z");
   assert.equal(logic.ageLevel("2026-10-12T08:00:00Z", now), "fresh");

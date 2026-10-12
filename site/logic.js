@@ -186,11 +186,11 @@ export function gridModel(coverage, status, filters = {}) {
   return { rows, columns, cells };
 }
 
-export function supportedLines(coverage, status) {
+export function supportedLines(coverage, status, filters = {}) {
   return Object.entries(coverage.supported).map(([name, range]) => {
     const tested = new Map();
     for (const job of coverage.jobs) {
-      if (job.kind !== "build" || job.disabled) continue;
+      if (job.kind !== "build" || job.disabled || !matchesFilters(job, status, filters)) continue;
       for (const toolchain of [job.compiler, job.device]) {
         if (!toolchain || toolchain.name !== name || !toolchain.version) continue;
         const version = shortVersion(name, toolchain.version);
