@@ -90,6 +90,12 @@ thead th { position: sticky; top: 0; background: var(--bg); }
 .jobs tbody th { font-weight: normal; font-family: ui-monospace, monospace; font-size: 0.8rem; overflow-wrap: anywhere; }
 .grid td { min-width: 64px; }
 .grid tbody th { white-space: nowrap; }
+/* a thicker line where the next toolchain starts, e.g. between cuda and rocm */
+.grid tbody tr.group-start > * { border-top: 2px solid var(--muted); }
+/* the vendor headings (CPU, NVIDIA, AMD, Intel) over the machine columns */
+.grid thead th[rowspan] { vertical-align: bottom; }
+.grid thead th.vendor { text-align: center; color: var(--muted); font-size: 0.75rem; letter-spacing: 0.05em; text-transform: uppercase; }
+.grid .group-edge { border-left: 2px solid var(--muted); }
 
 .badge, .chip {
   display: inline-block;

@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import * as logic from "../../site/logic.js";
 
 const machines = {
-  "tum-l40s": { site: "TUM", node: "gpu-nvidia", gpu: "NVIDIA L40S", column: "L40S" },
-  "tum-rocinante-nvidia": { site: "TUM", node: "rocinante", gpu: "NVIDIA A100 or A2", column: "rocinante NVIDIA" },
-  "github-x86-64": { site: "GitHub", node: "ubuntu-24.04", gpu: null, arch: "x86-64", column: "x86-64" },
+  "tum-l40s": { site: "TUM", node: "gpu-nvidia", gpu: "NVIDIA L40S", vendor: "nvidia", column: "L40S" },
+  "tum-rocinante-nvidia": { site: "TUM", node: "rocinante", gpu: "NVIDIA A100 or A2", vendor: "nvidia", column: "rocinante NVIDIA" },
+  "github-x86-64": { site: "GitHub", node: "ubuntu-24.04", gpu: null, vendor: "cpu", arch: "x86-64", column: "x86-64" },
 };
 
 function job(key, extra = {}) {
@@ -128,6 +128,25 @@ test("gridModel places jobs and flags results from elsewhere and moved jobs", ()
   assert.equal(model.cells["cuda ?\tunknown"][0].elsewhere, true);
   assert.equal(model.cells["cuda 13.3\tcompile-only"][0].status, "notrun");
   assert.deepEqual(logic.gridModel(coverage, status, { linkage: "static" }).rows, ["cuda 12.0"]);
+});
+
+test("gridModel groups neighbouring columns by the vendor of their machines", () => {
+  const groups = logic.gridModel(coverage, status, {}).groups.map((g) => [g.name, g.columns]);
+  assert.deepEqual(groups, [
+    ["CPU", ["x86-64"]],
+    ["NVIDIA", ["rocinante NVIDIA", "L40S"]],
+    [null, ["compile-only"]],
+    [null, ["unknown"]],
+  ]);
+  // a vendor whose columns are not next to each other gets two groups
+  const split = logic.gridModel({ ...coverage, columns: ["L40S", "x86-64", "rocinante NVIDIA", "compile-only"] }, status, {});
+  assert.deepEqual(split.groups.map((g) => g.name), ["NVIDIA", "CPU", "NVIDIA", null, null]);
+});
+
+test("toolchainName drops the version from a grid row", () => {
+  assert.deepEqual(logic.gridModel(coverage, status, {}).rows.map(logic.toolchainName), ["cuda", "cuda", "cuda", "cuda", "gcc"]);
+  assert.equal(logic.toolchainName("oneapi 2024.2"), "oneapi");
+  assert.equal(logic.toolchainName("n/a"), "n/a");
 });
 
 test("countSettings counts every value", () => {

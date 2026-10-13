@@ -7,22 +7,25 @@
 # matching runner with the fewest tags, so nvidia-gpus jobs go to rocinante,
 # never to the L40S node.
 
+# in the order of the grid's rows: NVIDIA (cuda), AMD (rocm), Intel (oneapi),
+# then the CPUs, and oldest GPU generation first within a vendor; the page puts
+# a vendor heading over neighbouring columns
 columns:
-  - x86-64
-  - arm64
-  - apple-arm64
-  - windows-x86-64
-  - P100
-  - rocinante NVIDIA
-  - L40S
-  - A100
-  - GH200
+  - P100              # Pascal, sm_60
+  - A100              # Ampere, sm_80
+  - rocinante NVIDIA  # Ampere: A100 (sm_80) or A2 (sm_86)
+  - L40S              # Ada Lovelace, sm_89
+  - GH200             # Hopper, sm_90
   - MI50
   - MI210
   - MI250X
   - MI300A
   - A770
   - PVC
+  - x86-64
+  - arm64
+  - apple-arm64
+  - windows-x86-64
   - compile-only
 
 machines:

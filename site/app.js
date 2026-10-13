@@ -2,7 +2,7 @@
 // through textContent (the el helper), so job names cannot inject markup.
 import {
   STATUS_ORDER, effectiveStatus, countSettings, statusRows, summary,
-  gridModel, chipLabel, supportedLines, ageLevel, shortSha, formatDuration, machineLabel,
+  gridModel, chipLabel, supportedLines, ageLevel, shortSha, formatDuration, machineLabel, toolchainName,
 } from "./logic.js";
 
 const state = { coverage: null, status: null, filters: {}, view: "status" };
@@ -152,11 +152,23 @@ function renderCoverage(root) {
   const model = gridModel(coverage, status, state.filters);
   root.append(el("p", { class: "legend" },
     "D debug, R release, S static, M MPI, P half or bfloat16. A dashed border marks a result from a pull request, an orange ring a job that last ran on a different machine than the one it is sent to. Hover a chip for details."));
+  // a thicker line left of the first column of each vendor group
+  const firsts = new Set(model.groups.slice(1).map((group) => group.columns[0]));
+  const edge = (column) => (firsts.has(column) ? "group-edge" : null);
   root.append(el("div", { class: "scroll" }, el("table", { class: "grid" },
-    el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Toolchain"), model.columns.map((c) => el("th", { scope: "col" }, c)))),
-    el("tbody", {}, model.rows.map((row) => el("tr", {},
+    el("thead", {},
+      el("tr", {},
+        el("th", { scope: "col", rowspan: 2 }, "Toolchain"),
+        model.groups.map((group) => (group.name
+          ? el("th", { scope: "colgroup", colspan: group.columns.length, class: ["vendor", edge(group.columns[0])].filter(Boolean).join(" ") }, group.name)
+          : el("th", { scope: "col", rowspan: 2, class: edge(group.columns[0]) }, group.columns[0])))),
+      el("tr", {}, model.groups.filter((group) => group.name).map((group) =>
+        group.columns.map((column) => el("th", { scope: "col", class: edge(column) }, column))))),
+    el("tbody", {}, model.rows.map((row, i) => el("tr", {
+      class: i > 0 && toolchainName(row) !== toolchainName(model.rows[i - 1]) ? "group-start" : null,
+    },
       el("th", { scope: "row" }, row),
-      model.columns.map((column) => el("td", {}, (model.cells[`${row}\t${column}`] ?? []).map(chip)))))))));
+      model.columns.map((column) => el("td", { class: edge(column) }, (model.cells[`${row}\t${column}`] ?? []).map(chip)))))))));
   root.append(el("h2", {}, "Build settings"));
   const counts = countSettings(coverage.jobs.filter((job) => job.kind === "build" && !job.disabled));
   root.append(el("div", { class: "settings" }, Object.entries(counts).map(([setting, values]) => el("section", {},

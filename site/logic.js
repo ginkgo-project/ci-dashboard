@@ -155,6 +155,9 @@ function splitLabel(label) {
   return space < 0 ? [label, ""] : [label.slice(0, space), label.slice(space + 1)];
 }
 
+// the toolchain of a grid row, e.g. "cuda" for "cuda 12.0"
+export const toolchainName = (label) => splitLabel(label)[0];
+
 export function compareToolchainLabels(a, b) {
   const [nameA, versionA] = splitLabel(a);
   const [nameB, versionB] = splitLabel(b);
@@ -183,7 +186,28 @@ export function gridModel(coverage, status, filters = {}) {
       moved: Boolean(latest?.machine && job.dispatched_to.length && !job.dispatched_to.includes(latest.machine)),
     });
   }
-  return { rows, columns, cells };
+  return { rows, columns, cells, groups: columnGroups(columns, coverage.machines) };
+}
+
+const VENDOR_NAMES = { cpu: "CPU", nvidia: "NVIDIA", amd: "AMD", intel: "Intel" };
+
+// The headings over the grid columns: runs of neighbouring columns whose
+// machines have the same vendor. Columns without one (compile-only, unknown)
+// each get a group without a name.
+function columnGroups(columns, machines) {
+  const vendorOf = {};
+  for (const machine of Object.values(machines)) {
+    if (machine.vendor) vendorOf[machine.column] ??= machine.vendor;
+  }
+  const groups = [];
+  for (const column of columns) {
+    const vendor = vendorOf[column];
+    const name = vendor ? VENDOR_NAMES[vendor] ?? vendor : null;
+    const last = groups.at(-1);
+    if (name && last?.name === name) last.columns.push(column);
+    else groups.push({ name, columns: [column] });
+  }
+  return groups;
 }
 
 export function supportedLines(coverage, status, filters = {}) {
