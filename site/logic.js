@@ -230,19 +230,46 @@ export function supportedLines(coverage, status, filters = {}) {
         tested.set(version, mark);
       }
     }
-    const marks = [...tested.values()].sort((a, b) => compareVersions(a.version, b.version));
-    return {
-      name,
-      min: range.min,
-      max: range.max ?? null,
-      tested: marks.map((mark) => ({
+    const marks = [...tested.values()]
+      .sort((a, b) => compareVersions(a.version, b.version))
+      .map((mark) => ({
         ...mark,
         failed: mark.failedJobs.length > 0,
         below: compareVersions(mark.version, range.min) < 0,
         above: range.max ? compareVersions(mark.version, range.max) > 0 : false,
-      })),
-    };
+      }));
+    placeMarks(marks, range);
+    return { name, min: range.min, max: range.max ?? null, tested: marks };
   });
+}
+
+// marks closer than this (as a fraction of the line) put their labels on
+// alternate sides of the line
+const LABEL_GAP = 0.06;
+
+// Sets each mark's position on its line, from 0 at min to 1 at max (or at the
+// newest tested version without a max), and null outside the range; and
+// whether its label goes below the line, to keep it clear of its neighbours.
+function placeMarks(marks, range) {
+  const inside = marks.filter((mark) => !mark.below && !mark.above);
+  const versions = [range.min, range.max, ...inside.map((mark) => mark.version)].filter(Boolean);
+  // the minor version as a fraction of a major one, scaled so the largest
+  // minor on the line (e.g. 51 in msvc 19.51) still stays below the next major
+  const minor = (version) => Number(String(version).split(".")[1] ?? 0) || 0;
+  const scale = 10 ** String(Math.max(...versions.map(minor))).length;
+  const value = (version) => Number(String(version).split(".")[0]) + minor(version) / scale;
+  const low = value(range.min);
+  const high = value(range.max ?? inside.at(-1)?.version ?? range.min);
+  let lastAbove = -Infinity;
+  let lastBelow = -Infinity;
+  for (const mark of marks) {
+    mark.position = inside.includes(mark) ? (high > low ? (value(mark.version) - low) / (high - low) : 0) : null;
+    mark.labelBelow = false;
+    if (mark.position === null) continue;
+    mark.labelBelow = mark.position - lastAbove < LABEL_GAP && mark.position - lastBelow >= LABEL_GAP;
+    if (mark.labelBelow) lastBelow = mark.position;
+    else lastAbove = mark.position;
+  }
 }
 
 export function ageLevel(generatedAt, now = new Date()) {

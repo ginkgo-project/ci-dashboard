@@ -126,18 +126,23 @@ thead th { position: sticky; top: 0; background: var(--bg); }
 .count { color: var(--muted); }
 
 .range { margin: 16px 0; }
-.line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* scrolls sideways on narrow screens, so close marks keep room for their labels */
+.line { display: flex; align-items: center; gap: 8px; overflow-x: auto; }
 .bound { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+/* marks sit on the track by version number: the page sets each one's left */
 .track {
   flex: 1;
-  min-width: 160px;
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  padding: 18px 8px 4px;
-  background: linear-gradient(var(--line), var(--line)) center 60% / 100% 2px no-repeat;
+  min-width: 560px;
+  position: relative;
+  /* room for a label above and one below the mark, inside the scrolling line */
+  height: 56px;
+  margin: 0 8px;
+  background: linear-gradient(var(--line), var(--line)) center / 100% 2px no-repeat;
 }
-.mark { position: relative; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ok); background: var(--bg); }
+.mark { position: relative; flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ok); background: var(--bg); }
+.track .mark { position: absolute; top: 50%; transform: translate(-50%, -50%); }
+.mark.label-below .label { bottom: auto; top: 16px; }
+.track .none { position: absolute; left: 50%; bottom: 50%; transform: translateX(-50%); white-space: nowrap; }
 .mark.hw { background: var(--ok); }
 .mark.failed { border-color: var(--fail); }
 .mark.hw.failed { background: var(--fail); }

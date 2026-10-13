@@ -182,6 +182,29 @@ test("supportedLines marks failures red unless the machine caused them, and name
   assert.deepEqual([mark(cuda, "12.0").failed, mark(cuda, "12.0").failedJobs], [false, []]);
 });
 
+test("supportedLines places the marks by version number", () => {
+  const places = (line) => line.tested.map((t) => [t.version, t.position === null ? null : Number(t.position.toFixed(3))]);
+  const [gcc, cuda] = logic.supportedLines(coverage, status);
+  assert.deepEqual(places(gcc), [["9", 0], ["12", 0.429], ["13", 0.571]]);
+  // without a max, the line ends at the newest tested version
+  assert.deepEqual(places(cuda), [["11.8", 0.348], ["12.0", 0.435], ["13.3", 1]]);
+  // versions outside the range are not on the line
+  const [low] = logic.supportedLines({ ...coverage, supported: { gcc: { min: "10", max: "12" } } }, status);
+  assert.deepEqual(places(low), [["9", null], ["12", 1], ["13", null]]);
+  // two-digit minors stay below the next major: 19.44 between 19.20 and 19.51
+  const msvc = { ...coverage, supported: { msvc: { min: "19.20" } }, jobs: [
+    job("github:old", { compiler: { name: "msvc", version: "19.44" } }),
+    job("github:new", { compiler: { name: "msvc", version: "19.51" } }),
+  ] };
+  assert.deepEqual(places(logic.supportedLines(msvc, null)[0]), [["19.44", 0.774], ["19.51", 1]]);
+});
+
+test("supportedLines puts the label of a mark close to the previous one below the line", () => {
+  const [cuda] = logic.supportedLines({ ...coverage, supported: { cuda: { min: "11.0", max: "30.0" } } }, status);
+  // 11.8 and 12.0 are close on a line up to 30.0; 13.3 is far enough from 11.8
+  assert.deepEqual(cuda.tested.map((t) => [t.version, t.labelBelow]), [["11.8", false], ["12.0", true], ["13.3", false]]);
+});
+
 test("supportedLines only counts the jobs that match the filters", () => {
   const versions = (filters) => logic.supportedLines(coverage, status, filters).map((line) => line.tested.map((t) => t.version));
   assert.deepEqual(versions({ site: "GitHub" }), [["13"], ["13.3"]]);
