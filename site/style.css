@@ -141,6 +141,9 @@ thead th { position: sticky; top: 0; background: var(--bg); }
 .mark.hw { background: var(--ok); }
 .mark.failed { border-color: var(--fail); }
 .mark.hw.failed { background: var(--fail); }
+/* red marks link to a log; keep their version label plain */
+a.mark { color: inherit; text-decoration: none; }
+a.mark:hover, a.mark:focus-visible { box-shadow: 0 0 0 3px var(--line); }
 .mark .label { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); font-size: 0.75rem; white-space: nowrap; }
 .none { color: var(--muted); font-size: 0.85rem; }
 

@@ -1,10 +1,17 @@
-# Supported toolchain versions. The minimums come from Ginkgo's README. max is
-# the newest release and is optional; it is set where the CI shows that
-# release exists (2026-10-12). Quote every version.
+# Supported toolchain versions, in the order of the coverage grid's rows.
+# - min: the minimum in Ginkgo's README (msvc: VS 2019 is MSVC 19.20; apple
+#   clang: the README names 15.0 as tested).
+# - max: the newest release on the vendor's site, checked on 2026-10-13. It is
+#   optional, and goes stale: update it when a new release comes out.
+# Quote every version.
 
+cuda: {min: "11.0", max: "13.4"}
+rocm: {min: "6.2", max: "10.1"}
+oneapi: {min: "2024.1", max: "2026.1"}
 gcc: {min: "9", max: "16"}
-clang: {min: "5", max: "22"}
-cuda: {min: "11.0", max: "13.3"}
-rocm: {min: "6.2", max: "7.2"}
-oneapi: {min: "2024.1"}
-nvhpc: {min: "22.7"}
+clang: {min: "5", max: "23"}
+nvhpc: {min: "22.7", max: "26.9"}
+appleclang: {min: "15"}
+msvc: {min: "19.20"}
+# the README claims the Cray compiler, but no job tests it
+cray: {min: "14.0.1"}

@@ -160,11 +160,26 @@ test("countSettings counts every value", () => {
 test("supportedLines marks tested versions", () => {
   const [gcc, cuda] = logic.supportedLines(coverage, status);
   assert.equal(gcc.name, "gcc");
-  assert.deepEqual(gcc.tested.map((t) => [t.version, t.hardware, t.failed]), [["9", true, false], ["12", true, true], ["13", false, false]]);
+  // gcc 12 is not red: cuda120 failed because the disk was full
+  assert.deepEqual(gcc.tested.map((t) => [t.version, t.hardware, t.failed]), [["9", true, false], ["12", true, false], ["13", false, false]]);
   assert.deepEqual(cuda.tested.map((t) => t.version), ["11.8", "12.0", "13.3"]);
   assert.equal(cuda.max, null);
   const [low] = logic.supportedLines({ ...coverage, supported: { gcc: { min: "10", max: "12" } } }, status);
   assert.deepEqual(low.tested.map((t) => [t.version, t.below, t.above]), [["9", true, false], ["12", false, false], ["13", false, true]]);
+});
+
+test("supportedLines marks failures red unless the machine caused them, and names the failing jobs and their logs", () => {
+  const failing = { ...status, jobs: { ...status.jobs,
+    "gitlab:build/gcc9": { history: [result("failed", { reason: "tests", url: "https://gitlab.com/j/9" }), null], elsewhere: null },
+    // GitHub failures have no reason
+    "github:cuda-compile": { history: [result("failed", { reason: null, url: "https://github.com/j/13" }), null], elsewhere: null },
+  } };
+  const [gcc, cuda] = logic.supportedLines(coverage, failing);
+  const mark = (line, version) => line.tested.find((t) => t.version === version);
+  assert.deepEqual([mark(gcc, "9").failed, mark(gcc, "9").failedJobs], [true, [{ name: "build/gcc9", url: "https://gitlab.com/j/9" }]]);
+  assert.deepEqual([mark(cuda, "13.3").failed, mark(cuda, "13.3").failedJobs], [true, [{ name: "cuda-compile", url: "https://github.com/j/13" }]]);
+  // full disk
+  assert.deepEqual([mark(cuda, "12.0").failed, mark(cuda, "12.0").failedJobs], [false, []]);
 });
 
 test("supportedLines only counts the jobs that match the filters", () => {

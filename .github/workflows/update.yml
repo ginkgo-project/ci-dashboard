@@ -5,7 +5,9 @@ name: Update and deploy
 # deploys nothing, so the page keeps the last good data and shows its age.
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    # every 30 minutes, away from the full and half hour, when GitHub delays
+    # or drops scheduled runs under load
+    - cron: "17,47 * * * *"
   workflow_dispatch:
   push:
     branches: [main]

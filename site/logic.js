@@ -7,6 +7,8 @@ const NAME_ORDER = ["cuda", "rocm", "oneapi", "gcc", "clang", "nvhpc", "applecla
 const MAJOR_ONLY = ["gcc", "clang", "appleclang"];
 const NOT_RUN = ["skipped", "manual", "created", "scheduled"];
 const PENDING = ["pending", "waiting_for_resource", "preparing"];
+// failure reasons that come from the machine, not from the toolchain
+const INFRASTRUCTURE = ["disk", "runner", "stuck", "timeout", "slurm-timeout"];
 
 const finishedAt = (result) => Date.parse(result.finished_at ?? "") || 0;
 
@@ -218,9 +220,13 @@ export function supportedLines(coverage, status, filters = {}) {
       for (const toolchain of [job.compiler, job.device]) {
         if (!toolchain || toolchain.name !== name || !toolchain.version) continue;
         const version = shortVersion(name, toolchain.version);
-        const mark = tested.get(version) ?? { version, hardware: false, failed: false };
+        const mark = tested.get(version) ?? { version, hardware: false, failedJobs: [] };
         mark.hardware ||= !job.compile_only;
-        mark.failed ||= effectiveStatus(latestResult(status?.jobs?.[job.key])) === "failed";
+        const latest = latestResult(status?.jobs?.[job.key]);
+        if (effectiveStatus(latest) === "failed" && !INFRASTRUCTURE.includes(latest.reason)
+            && !mark.failedJobs.some((failed) => failed.name === job.name)) {
+          mark.failedJobs.push({ name: job.name, url: latest.url });
+        }
         tested.set(version, mark);
       }
     }
@@ -231,6 +237,7 @@ export function supportedLines(coverage, status, filters = {}) {
       max: range.max ?? null,
       tested: marks.map((mark) => ({
         ...mark,
+        failed: mark.failedJobs.length > 0,
         below: compareVersions(mark.version, range.min) < 0,
         above: range.max ? compareVersions(mark.version, range.max) > 0 : false,
       })),

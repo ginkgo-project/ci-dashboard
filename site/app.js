@@ -183,12 +183,20 @@ function renderCoverage(root) {
 
 function renderSupported(root) {
   root.append(el("p", { class: "legend" },
-    "Filled: tests run on hardware. Hollow: compiled only. Red: the latest result failed. Versions outside the supported range sit outside the line."));
+    "Filled: tests run on hardware. Hollow: compiled only. Red: a job with this version fails, not counting a full disk, a timeout or a runner problem; hover a red mark for the jobs, click it for the log. Versions outside the supported range sit outside the line."));
   for (const line of supportedLines(state.coverage, state.status, state.filters)) {
-    const mark = (t) => el("span", {
-      class: ["mark", t.hardware ? "hw" : "compile", t.failed && "failed"].filter(Boolean).join(" "),
-      title: `${line.name} ${t.version}: ${t.hardware ? "tested on hardware" : "compiled only"}${t.failed ? ", failing" : ""}`,
-    }, el("span", { class: "label" }, t.version));
+    const mark = (t) => {
+      // a red mark links to the log of its first failing job
+      const log = t.failedJobs.find((failed) => isWebLink(failed.url));
+      const attrs = {
+        class: ["mark", t.hardware ? "hw" : "compile", t.failed && "failed"].filter(Boolean).join(" "),
+        title: `${line.name} ${t.version}: ${t.hardware ? "tested on hardware" : "compiled only"}`
+          + (t.failed ? `, failing in ${t.failedJobs.map((failed) => failed.name).join(", ")}` : "")
+          + (log ? `\nClick for the log of ${log.name}` : ""),
+      };
+      const label = el("span", { class: "label" }, t.version);
+      return log ? el("a", { ...attrs, href: log.url }, label) : el("span", attrs, label);
+    };
     const inside = line.tested.filter((t) => !t.below && !t.above);
     root.append(el("section", { class: "range" },
       el("h3", {}, line.name),
