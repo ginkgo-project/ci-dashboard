@@ -31,11 +31,17 @@ def test_check_coverage_rejects_problems():
 
 def test_check_status():
     result = {"status": "success", "url": "https://x"}
+    pull = {"number": 7, "title": "t", "url": "https://x/pull/7", "sha": "s", "updated_at": "t",
+            "result": result, "findings": [{"path": "a.cpp", "line": 1, "check": "c", "message": "m"}]}
     good = {"generated_at": "t", "commits": [{"sha": "a"}],
-            "jobs": {"k": {"history": [result], "elsewhere": None}}, "unmatched": []}
+            "jobs": {"k": {"history": [result], "elsewhere": None}}, "unmatched": [],
+            "clang_tidy": {"check": "clang-tidy", "pulls": [pull]}}
     schema.check_status(good)
     bad = {**good, "jobs": {"k": {"history": [], "elsewhere": None}}}
     with pytest.raises(ValueError, match="k: history has 0 entries for 1 commits"):
         schema.check_status(bad)
     with pytest.raises(ValueError, match="k: missing url"):
         schema.check_status({**good, "jobs": {"k": {"history": [None], "elsewhere": {"status": "x"}}}})
+    with pytest.raises(ValueError, match="pull request 7: line should be a int"):
+        schema.check_status({**good, "clang_tidy": {"check": "clang-tidy", "pulls": [
+            {**pull, "findings": [{"path": "a.cpp", "line": "1", "check": "c", "message": "m"}]}]}})

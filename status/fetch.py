@@ -28,10 +28,10 @@ class Fetcher:
     def _request(self, url: str, params: dict | None) -> bytes:
         if params:
             url = f"{url}?{urllib.parse.urlencode(params)}"
-        headers = {"User-Agent": "ginkgo-ci-dashboard"}
+        request = urllib.request.Request(url, headers={"User-Agent": "ginkgo-ci-dashboard"})
+        # not sent on redirects: job logs redirect to blob storage, which rejects the token
         if self.github_token and url.startswith("https://api.github.com/"):
-            headers["Authorization"] = f"Bearer {self.github_token}"
-        request = urllib.request.Request(url, headers=headers)
+            request.add_unredirected_header("Authorization", f"Bearer {self.github_token}")
         error: Exception | None = None
         for attempt in range(self.retries + 1):
             if attempt:

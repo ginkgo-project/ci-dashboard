@@ -5,8 +5,11 @@ COVERAGE_FIELDS = {"generated_at": str, "warnings": list, "machines": dict, "col
                    "supported": dict, "jobs": list}
 JOB_FIELDS = {"key": str, "ci": str, "name": str, "kind": str, "pipelines": list,
               "machines": list, "dispatched_to": list, "compile_only": bool, "disabled": bool}
-STATUS_FIELDS = {"generated_at": str, "commits": list, "jobs": dict, "unmatched": list}
+STATUS_FIELDS = {"generated_at": str, "commits": list, "jobs": dict, "unmatched": list,
+                 "clang_tidy": dict}
 RESULT_FIELDS = {"status": str, "url": str}
+PULL_FIELDS = {"number": int, "title": str, "url": str, "sha": str, "updated_at": str}
+FINDING_FIELDS = {"path": str, "line": int, "check": str, "message": str}
 
 
 def _require(obj, fields: dict, where: str) -> None:
@@ -47,3 +50,11 @@ def check_status(doc: dict) -> None:
             results.append(entry["elsewhere"])
         for result in results:
             _require(result, RESULT_FIELDS, key)
+    _require(doc["clang_tidy"], {"check": str, "pulls": list}, "clang_tidy")
+    for pull in doc["clang_tidy"]["pulls"]:
+        where = f"pull request {pull.get('number')}"
+        _require(pull, PULL_FIELDS, where)
+        if pull.get("result"):
+            _require(pull["result"], RESULT_FIELDS, where)
+        for finding in pull.get("findings") or []:
+            _require(finding, FINDING_FIELDS, where)

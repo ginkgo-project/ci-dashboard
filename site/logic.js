@@ -288,3 +288,56 @@ export function formatDuration(seconds) {
   if (minutes < 60) return `${minutes} min`;
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
+
+// pull requests without a clang-tidy run, e.g. not pushed to since the job
+// was added, go last
+const TIDY_ORDER = ["failed", "canceled", "pending", "running", "success", "notrun"];
+
+// The open pull requests with the status of their clang-tidy run: failing ones
+// first, then the most recently updated.
+export function tidyPulls(status) {
+  return (status?.clang_tidy?.pulls ?? [])
+    .map((pull) => ({ ...pull, status: effectiveStatus(pull.result) }))
+    .sort((a, b) => TIDY_ORDER.indexOf(a.status) - TIDY_ORDER.indexOf(b.status)
+      || Date.parse(b.updated_at) - Date.parse(a.updated_at));
+}
+
+// findings grouped by check, the check with the most findings first
+export function groupFindings(findings) {
+  const groups = new Map();
+  for (const finding of findings ?? []) {
+    if (!groups.has(finding.check)) groups.set(finding.check, []);
+    groups.get(finding.check).push(finding);
+  }
+  return [...groups].map(([check, items]) => ({ check, findings: items }))
+    .sort((a, b) => b.findings.length - a.findings.length || a.check.localeCompare(b.check));
+}
+
+// for each check, its findings and the pull requests they are in
+export function checkTotals(pulls) {
+  const totals = new Map();
+  for (const pull of pulls) {
+    for (const { check, findings } of groupFindings(pull.findings)) {
+      const total = totals.get(check) ?? { check, findings: 0, pulls: 0 };
+      total.findings += findings.length;
+      total.pulls += 1;
+      totals.set(check, total);
+    }
+  }
+  return [...totals.values()]
+    .sort((a, b) => b.pulls - a.pulls || b.findings - a.findings || a.check.localeCompare(b.check));
+}
+
+// the documentation of a clang-tidy check; compiler diagnostics have none
+export function checkDocsUrl(check) {
+  if (check.startsWith("clang-diagnostic-")) return null;
+  const module = check.startsWith("clang-analyzer-") ? "clang-analyzer" : check.split("-")[0];
+  return `https://clang.llvm.org/extra/clang-tidy/checks/${module}/${check.slice(module.length + 1)}.html`;
+}
+
+// the line of a finding in the newest commit of its pull request
+export function findingUrl(pull, finding) {
+  const repo = /^(https:\/\/github\.com\/[^/]+\/[^/]+)\/pull\/\d+$/.exec(pull.url);
+  if (!repo || finding.path.startsWith("/")) return null;
+  return `${repo[1]}/blob/${pull.sha}/${finding.path}#L${finding.line}`;
+}

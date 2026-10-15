@@ -3,10 +3,12 @@
 import {
   STATUS_ORDER, effectiveStatus, countSettings, statusRows, summary,
   gridModel, chipLabel, supportedLines, ageLevel, shortSha, formatDuration, machineLabel, toolchainName,
+  tidyPulls, groupFindings, checkTotals, checkDocsUrl, findingUrl,
 } from "./logic.js";
 
-const state = { coverage: null, status: null, filters: {}, view: "status" };
-const VIEWS = { status: renderStatus, coverage: renderCoverage, supported: renderSupported };
+// pull: the pull request picked by #clang-tidy/NUMBER
+const state = { coverage: null, status: null, filters: {}, view: "status", pull: null };
+const VIEWS = { status: renderStatus, coverage: renderCoverage, supported: renderSupported, "clang-tidy": renderClangTidy };
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -210,8 +212,86 @@ function renderSupported(root) {
   }
 }
 
+const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+function checkName(check) {
+  const docs = checkDocsUrl(check);
+  return docs
+    ? el("a", { class: "check", href: docs, title: "Documentation of the check" }, check)
+    : el("span", { class: "check" }, check);
+}
+
+function tidyDetail(pull) {
+  const count = pull.findings?.length ?? 0;
+  if (count) {
+    const partial = pull.reported > count ? ` (the log shows ${count} of ${pull.reported})` : "";
+    return `${plural(count, "finding")}${partial}: ${groupFindings(pull.findings).map((group) => group.check).join(", ")}`;
+  }
+  if (pull.status === "failed" && pull.findings === null) return "the log could not be read; the findings are in the log";
+  if (pull.status === "failed") return "failed without findings in its log";
+  if (pull.status === "success") return "no findings on the changed lines";
+  if (pull.status === "notrun") return pull.result ? "skipped" : "no clang-tidy run for the newest commit";
+  return pull.status;
+}
+
+function pullLine(pull) {
+  return [
+    el("span", { class: `badge s-${pull.status}` }, pull.status), " ",
+    el("a", { href: pull.url }, `#${pull.number}`), ` ${pull.title}`,
+    pull.draft ? el("span", { class: "count" }, " (draft)") : null,
+    el("span", { class: "pull-detail" }, tidyDetail(pull)),
+    pull.result && isWebLink(pull.result.url) ? el("a", { class: "pull-link", href: pull.result.url }, "log") : null,
+    pull.findings?.length ? el("a", { class: "pull-link", href: `#clang-tidy/${pull.number}`, title: "Link to these findings" }, "link") : null,
+  ];
+}
+
+function findingList(pull) {
+  return groupFindings(pull.findings).map(({ check, findings }) => el("section", { class: "check-group" },
+    el("h4", {}, checkName(check), el("span", { class: "count" }, ` ${findings.length}`)),
+    el("ul", { class: "findings" }, findings.map((finding) => {
+      const where = `${finding.path}:${finding.line}:${finding.col}`;
+      const url = findingUrl(pull, finding);
+      return el("li", {},
+        url ? el("a", { class: "where", href: url }, where) : el("span", { class: "where" }, where),
+        finding.severity === "error" ? el("span", { class: "badge s-failed" }, "error") : null,
+        ` ${finding.message}`);
+    }))));
+}
+
+function renderClangTidy(root) {
+  const tidy = state.status?.clang_tidy;
+  if (!tidy) {
+    root.append(el("p", { class: "none" }, "No clang-tidy results available."));
+    return;
+  }
+  const pulls = tidyPulls(state.status);
+  root.append(el("p", { class: "summary" },
+    `${pulls.filter((pull) => pull.findings?.length).length} of ${plural(pulls.length, "open pull request")} with clang-tidy findings`));
+  root.append(el("p", { class: "legend" },
+    `The job ${tidy.check} runs clang-tidy on the lines a pull request changes. Listed are the open pull requests updated in the last ${tidy.max_age_days} days, with the result for their newest commit. `
+    + "The line numbers come from the pull request merged into its target branch; the links open the file at the pull request's newest commit, where a line can be off if the target branch changed the same file. "
+    + "Silence a deliberate case with // NOLINT(check) or // NOLINTNEXTLINE(check)."));
+  const totals = checkTotals(pulls);
+  if (totals.length) {
+    root.append(el("h2", {}, "Checks with findings"), el("ul", { class: "check-totals" }, totals.map((total) => el("li", {},
+      checkName(total.check),
+      el("span", { class: "count" }, ` ${plural(total.findings, "finding")} in ${plural(total.pulls, "pull request")}`)))));
+  }
+  root.append(el("h2", {}, "Pull requests"));
+  for (const pull of pulls) {
+    const id = `clang-tidy/${pull.number}`;
+    root.append(pull.findings?.length
+      ? el("details", { class: "pull", id, open: state.pull === String(pull.number) }, el("summary", {}, pullLine(pull)), findingList(pull))
+      : el("div", { class: "pull", id }, pullLine(pull)));
+  }
+  if (state.pull) document.getElementById(`clang-tidy/${state.pull}`)?.scrollIntoView();
+}
+
 function render() {
-  renderFilters();
+  const filters = document.getElementById("filters");
+  // the filters pick jobs; the clang-tidy view lists pull requests
+  filters.hidden = state.view === "clang-tidy";
+  if (!filters.hidden) renderFilters();
   for (const link of document.querySelectorAll("#tabs a")) {
     if (link.getAttribute("href") === `#${state.view}`) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
@@ -233,7 +313,12 @@ async function main() {
   } catch (error) {
     showBanner("warning", `No job results (${error.message}); showing the coverage only.`);
   }
-  const fromHash = () => (VIEWS[location.hash.slice(1)] ? location.hash.slice(1) : "status");
+  // #view, or #clang-tidy/NUMBER for the findings of one pull request
+  const fromHash = () => {
+    const [view, pull] = location.hash.slice(1).split("/");
+    state.pull = pull ?? null;
+    return VIEWS[view] ? view : "status";
+  };
   state.view = fromHash();
   window.addEventListener("hashchange", () => { state.view = fromHash(); render(); });
   renderMeta();

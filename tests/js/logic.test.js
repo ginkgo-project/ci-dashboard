@@ -246,3 +246,45 @@ test("the machine filter matches the machines a job is sent to", () => {
   const builds = coverage.jobs.filter((j) => j.kind === "build" && !j.disabled);
   assert.deepEqual(logic.countSettings(builds).machine, { "cscs-gh200": 1, "github-x86-64": 2, "tum-rocinante-nvidia": 2 });
 });
+
+const finding = (check, line = 1, path = "core/a.cpp") => ({ path, line, col: 1, severity: "warning", check, message: "m" });
+const pull = (number, result, findings, updated_at = "2026-10-10T00:00:00Z") => ({
+  number, title: `t${number}`, url: `https://github.com/o/r/pull/${number}`, sha: `s${number}`,
+  updated_at, result, findings, reported: findings?.length ?? null,
+});
+
+test("tidyPulls puts failing pull requests first, then the most recently updated", () => {
+  const tidyStatus = { clang_tidy: { pulls: [
+    pull(1, result("success"), [], "2026-10-12T00:00:00Z"),
+    pull(2, null, null, "2026-10-13T00:00:00Z"),
+    pull(3, result("failed"), [finding("bugprone-x")], "2026-10-01T00:00:00Z"),
+    pull(4, result("success"), [], "2026-10-14T00:00:00Z"),
+  ] } };
+  assert.deepEqual(logic.tidyPulls(tidyStatus).map((p) => [p.number, p.status]),
+    [[3, "failed"], [4, "success"], [1, "success"], [2, "notrun"]]);
+  assert.deepEqual(logic.tidyPulls({}), []);
+});
+
+test("findings are grouped by check, and counted across pull requests", () => {
+  const findings = [finding("misc-b", 1), finding("bugprone-a", 2), finding("misc-b", 3)];
+  assert.deepEqual(logic.groupFindings(findings).map((g) => [g.check, g.findings.map((f) => f.line)]),
+    [["misc-b", [1, 3]], ["bugprone-a", [2]]]);
+  assert.deepEqual(logic.groupFindings(null), []);
+  const pulls = [pull(1, null, findings), pull(2, null, [finding("bugprone-a")]), pull(3, null, null)];
+  assert.deepEqual(logic.checkTotals(pulls), [
+    { check: "bugprone-a", findings: 2, pulls: 2 },
+    { check: "misc-b", findings: 2, pulls: 1 },
+  ]);
+});
+
+test("links to the documentation of a check and to the line of a finding", () => {
+  assert.equal(logic.checkDocsUrl("bugprone-narrowing-conversions"),
+    "https://clang.llvm.org/extra/clang-tidy/checks/bugprone/narrowing-conversions.html");
+  assert.equal(logic.checkDocsUrl("clang-analyzer-core.NullDereference"),
+    "https://clang.llvm.org/extra/clang-tidy/checks/clang-analyzer/core.NullDereference.html");
+  assert.equal(logic.checkDocsUrl("clang-diagnostic-error"), null);
+  const p = pull(2124, null, []);
+  assert.equal(logic.findingUrl(p, finding("x", 444, "include/ginkgo/core/base/mpi.hpp")),
+    "https://github.com/o/r/blob/s2124/include/ginkgo/core/base/mpi.hpp#L444");
+  assert.equal(logic.findingUrl(p, finding("x", 1, "/usr/include/x.h")), null);
+});

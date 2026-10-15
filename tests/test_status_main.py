@@ -1,9 +1,9 @@
 import datetime
 import json
 
-from status import merge
+from status import merge, tidy
 from status.__main__ import PROJECTS, collect, main
-from tests.fakes import FakeFetcher
+from tests.fakes import FakeFetcher, key as request_key
 
 NOW = datetime.datetime(2026, 10, 12, 8, 0, tzinfo=datetime.timezone.utc)
 GITLAB = f"https://gitlab.com/api/v4/projects/{PROJECTS['gitlab']}"
@@ -23,6 +23,7 @@ COVERAGE = {"jobs": [
     coverage_job("gitlab:build/a", ["develop", "pr-full"]),
     coverage_job("cscs:daint/x", ["pr-cscs"]),
     coverage_job("github:arm / a", ["develop", "pr-quick"]),
+    coverage_job(tidy.KEY, ["pr-quick"]),
 ]}
 
 
@@ -62,6 +63,14 @@ def responses():
         f"{CSCS}/pipelines": [{"id": 7, "sha": "ccc", "ref": "__CSCSCI__pr2114", "status": "success"}],
         f"{CSCS}/pipelines/7/jobs": [gitlab_job(71, "daint/x", "success")],
         f"{CSCS}/pipelines/7/test_report_summary": {"test_suites": []},
+        request_key(f"{GITHUB}/pulls", {"state": "open", "sort": "updated", "direction": "desc"}): [{
+            "number": 2124, "title": "t", "user": {"login": "dev"}, "draft": False,
+            "html_url": "https://github.com/ginkgo-project/ginkgo/pull/2124",
+            "updated_at": "2026-10-12T07:30:00Z", "head": {"sha": "ppp"}}],
+        request_key(f"{GITHUB}/commits/ppp/check-runs", {"check_name": tidy.CHECK}): {"check_runs": [{
+            "id": 9, "name": tidy.CHECK, "status": "completed", "conclusion": "success",
+            "started_at": "2026-10-12T07:30:00Z", "completed_at": "2026-10-12T07:40:00Z",
+            "html_url": "https://github.com/r/9"}]},
     }
 
 
@@ -71,6 +80,9 @@ def test_collect(hw):
     assert doc["jobs"]["gitlab:build/a"]["history"][0]["status"] == "success"
     assert doc["jobs"]["github:arm / a"]["history"][0]["status"] == "success"
     assert doc["jobs"]["cscs:daint/x"]["elsewhere"]["ref"] == "PR #2114"
+    # from the pull requests, without searching CI-Extra for it
+    assert doc["jobs"][tidy.KEY]["elsewhere"]["ref"] == "PR #2124"
+    assert [(pull["number"], pull["findings"]) for pull in doc["clang_tidy"]["pulls"]] == [(2124, [])]
     assert doc["unmatched"] == []
 
 
@@ -82,7 +94,7 @@ def test_main_writes_the_file(tmp_path, config_dir):
                 fetcher=FakeFetcher(responses()))
     assert code == 0
     assert set(json.loads(output.read_text())["jobs"]) == {"gitlab:build/a", "cscs:daint/x",
-                                                            "github:arm / a"}
+                                                            "github:arm / a", tidy.KEY}
 
 
 def test_main_fails_without_writing_when_an_api_fails(tmp_path, config_dir, capsys):

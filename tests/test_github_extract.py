@@ -34,6 +34,7 @@ def test_jobs_and_their_pipelines(extracted):
         "github:arm / arm/omp/release/shared-16bit": ["develop", "pr-quick"],
         "github:windows-msvc / msvc/windows-latest": ["develop", "pr-quick", "pr-full"],
         "github:linux-gcc-cuda / gcc/cuda-13.3/release/shared (only compile)": ["develop", "pr-quick"],
+        "github:clang-tidy / clang-tidy on changed lines": ["pr-quick"],
         "github:arm / arm/omp/release/static": ["pr-full"],
         "github:windows-msvc / msvc/windows-2022": ["pr-full"],
         "github:mirror / to_gitlab": ["develop"],
@@ -76,6 +77,21 @@ def test_other_workflows_become_checks(extracted):
     assert jobs["github:mirror / to_gitlab"].kind == "check"
     assert jobs["github:check-format"].kind == "check"
     assert jobs["github:check-format"].machines == []
+
+
+def test_a_job_that_only_configures_is_a_check(extracted):
+    jobs, _ = extracted
+    job = jobs["github:clang-tidy / clang-tidy on changed lines"]
+    assert job.kind == "check"
+    assert job.machines == ["github-x86-64"]
+
+
+def test_build_commands():
+    builds = ["make -j4", "ninja install", "cmake --build . -j4", 'bash -c "cmake .. && make"']
+    others = ["apt-get install -y build-essential cmake ninja-build", "cmake .. -G Ninja",
+              "cmake --version", "git diff | clang-tidy-diff-18.py -p1"]
+    assert all(github._BUILD_COMMAND.search(line) for line in builds)
+    assert not any(github._BUILD_COMMAND.search(line) for line in others)
 
 
 def test_unknown_runner_gives_a_warning(tmp_path, hw, env):

@@ -18,7 +18,7 @@ def test_build_combines_all_cis(tmp_path, config_dir):
     by_ci = {}
     for job in doc["jobs"]:
         by_ci[job["ci"]] = by_ci.get(job["ci"], 0) + 1
-    assert by_ci == {"gitlab": 8, "cscs": 1, "github": 7}
+    assert by_ci == {"gitlab": 8, "cscs": 1, "github": 8}
     assert any("the name says cuda 12.4" in warning for warning in doc["warnings"])
     json.dumps(doc)
 
@@ -27,7 +27,7 @@ def test_main_writes_the_file(tmp_path, config_dir, capsys):
     ginkgo = fake_ginkgo.write(tmp_path / "ginkgo")
     output = tmp_path / "site" / "coverage.json"
     assert main([str(ginkgo), str(output), "--config-dir", str(config_dir)]) == 0
-    assert len(json.loads(output.read_text())["jobs"]) == 16
+    assert len(json.loads(output.read_text())["jobs"]) == 17
     captured = capsys.readouterr()
-    assert "16 jobs written" in captured.out
+    assert "17 jobs written" in captured.out
     assert "warning: gitlab:broken" in captured.err

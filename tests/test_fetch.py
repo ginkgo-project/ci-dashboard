@@ -1,5 +1,6 @@
 import io
 import urllib.error
+import urllib.request
 
 import pytest
 
@@ -58,6 +59,19 @@ def test_github_token_is_only_sent_to_github():
     fetcher.json("https://gitlab.com/api/v4/b")
     assert seen == {"https://api.github.com/a": "Bearer secret",
                     "https://gitlab.com/api/v4/b": None}
+
+
+def test_github_token_is_not_sent_on_redirects():
+    requests = []
+
+    def opener(request, timeout):
+        requests.append(request)
+        return io.BytesIO(b"log")
+
+    Fetcher(github_token="secret", opener=opener, sleep=None).text("https://api.github.com/logs")
+    redirected = urllib.request.HTTPRedirectHandler().redirect_request(
+        requests[0], None, 302, "Found", {}, "https://blob.example/log")
+    assert redirected.get_header("Authorization") is None
 
 
 class Pages:

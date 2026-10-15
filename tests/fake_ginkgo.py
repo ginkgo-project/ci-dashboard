@@ -187,6 +187,24 @@ jobs:
     with: *with
   linux-gcc-cuda:
     uses: ./.github/workflows/linux-gcc-cuda.yml
+  clang-tidy:
+    if: >-
+      ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, '1:ST:SKIP_ALL_CI') }}
+    uses: ./.github/workflows/clang-tidy.yml
+"""
+
+# configures for the compilation database only, and runs on pull requests only
+CLANG_TIDY = """
+on:
+  workflow_call:
+jobs:
+  clang-tidy:
+    name: clang-tidy on changed lines
+    runs-on: [ubuntu-24.04]
+    steps:
+      - run: sudo apt-get install -y ninja-build clang-tidy-18
+      - run: cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DGINKGO_BUILD_TESTS=OFF
+      - run: git diff -U0 HEAD^1 HEAD | clang-tidy-diff-18.py -p1 -path build
 """
 
 CI_EXTRA = """
@@ -328,6 +346,7 @@ FILES = {
     ".github/workflows/arm.yml": ARM,
     ".github/workflows/windows-msvc.yml": WINDOWS,
     ".github/workflows/linux-gcc-cuda.yml": LINUX_CUDA,
+    ".github/workflows/clang-tidy.yml": CLANG_TIDY,
     ".github/workflows/mirror-develop.yml": MIRROR_DEVELOP,
     ".github/workflows/mirror-major.yml": MIRROR_MAJOR,
     ".github/workflows/mirror.yml": MIRROR,

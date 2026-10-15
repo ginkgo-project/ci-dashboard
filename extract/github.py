@@ -21,6 +21,9 @@ _FULL_SWITCH = re.compile(
     r"fromJSON\(\s*inputs\.full\s*&&\s*'([^']*)'\s*\|\|\s*'([^']*)'\s*\)")
 _CMAKE = re.compile(r"\bcmake\b")
 _TEST_COMMAND = re.compile(r"\bctest\b")
+# not "ninja-build" in an apt-get line, nor "-G Ninja"
+_BUILD_COMMAND = re.compile(r"(?:^|[\s;&|\"'(])(?:cmake\s+--build|make|ninja)(?=$|[\s;&|\"')])",
+                            re.MULTILINE)
 
 
 def evaluate(text: str, matrix: dict) -> str:
@@ -55,6 +58,11 @@ def matrix_combinations(matrix, full: bool | None) -> list[dict]:
     keys = list(axes)
     return [dict(zip(keys, combination))
             for combination in itertools.product(*(axes[key] for key in keys))]
+
+
+def pull_request_only(job: dict) -> bool:
+    """A job whose condition requires a pull request, e.g. clang-tidy on the changed lines."""
+    return "github.event_name=='pull_request'" in str(job.get("if", "")).replace(" ", "")
 
 
 def runs_with(job: dict, full: bool | None) -> bool:
@@ -105,10 +113,12 @@ def extract(root: Path, hw: Hardware, env: dict) -> tuple[list[Job], list[str]]:
             for prefix, job_id, job, full in targets:
                 if not runs_with(job, full):
                     continue
+                runs_in = ([p for p in pipelines if p != "develop"]
+                           if pull_request_only(caller) or pull_request_only(job) else pipelines)
                 for matrix in matrix_combinations((job.get("strategy") or {}).get("matrix"), full):
                     record = _build_job(prefix, job_id, job, matrix, hw, env, warnings)
                     existing = jobs.setdefault(record.key, record)
-                    existing.pipelines += [p for p in pipelines if p not in existing.pipelines]
+                    existing.pipelines += [p for p in runs_in if p not in existing.pipelines]
     for name, doc in docs.items():
         if name in ENTRY_WORKFLOWS or name in called:
             continue
@@ -137,7 +147,8 @@ def _build_job(prefix: str, job_id: str, job: dict, matrix: dict, hw: Hardware, 
         warnings.append(f"{record.key}: unknown runner {runs_on}")
     script = evaluate("\n".join(str(step.get("run", "")) for step in job.get("steps") or []),
                       matrix)
-    if not _CMAKE.search(script):
+    # a job that only configures, e.g. for clang-tidy's compilation database, builds nothing
+    if not _CMAKE.search(script) or not (_BUILD_COMMAND.search(script) or _TEST_COMMAND.search(script)):
         record.kind = "check"
         return record
     runner_env = env["github_runners"].get(runs_on, {})

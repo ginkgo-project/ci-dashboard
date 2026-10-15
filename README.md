@@ -6,7 +6,7 @@ Actions jobs.
 
 ## Goals
 
-The page answers two questions for Ginkgo maintainers:
+The page answers three questions for Ginkgo maintainers:
 
 1. **What does the CI cover?** Toolchain versions, debug or release, shared
    or static, MPI, OpenMP and precision options, and the hardware
@@ -14,6 +14,9 @@ The page answers two questions for Ginkgo maintainers:
    versions with the versions Ginkgo claims to support.
 2. **What is failing on `develop`?** Which jobs fail, on which machine,
    whether a job is flaky or consistently broken, and the likely reason.
+3. **What does clang-tidy find in a pull request?** Which checks fail on the
+   lines each open pull request changes, with links to the lines and to the
+   documentation of each check.
 
 So when someone changes the CI, the page shows what coverage was gained or
 lost. When `develop` is red, it lists the failing jobs and their reasons,
@@ -54,16 +57,23 @@ GitLab API, GitHub API -------> status ----> site/status.json ----+
     request.
   - **Failure reasons:** classified from the job log, e.g. build, tests,
     timeout, disk, runner or the Slurm time limit.
+  - **clang-tidy:** for each open pull request updated in the last 60 days,
+    the latest run of the `clang-tidy / clang-tidy on changed lines` job on
+    its newest commit, and the findings parsed from the job's log. The log is
+    read only when the job failed.
 - **`site/`** is the page: `index.html`, `style.css`, `app.js`, and
   `logic.js`, which holds the pure functions the tests cover. It only reads
-  the two JSON files and makes no API calls. It has three views:
+  the two JSON files and makes no API calls. It has four views:
   - **Status:** the jobs on `develop`, failing ones first, with their recent
     history.
   - **Coverage:** a grid of toolchains against hardware.
   - **Supported vs. tested:** for each toolchain, the tested versions against
     the supported range.
+  - **clang-tidy:** the open pull requests, failing ones first, with their
+    findings grouped by check. `#clang-tidy/NUMBER` opens the findings of one
+    pull request.
 
-  All three views can be filtered by CI, site, machine, pipeline, build
+  The first three views can be filtered by CI, site, machine, pipeline, build
   options and result.
 
 `.github/workflows/update.yml` runs the tests, both scripts and the deployment
@@ -76,6 +86,12 @@ to GitHub Pages every 30 minutes, on pushes to `main` and by hand.
 - **Why the workflow fetches the data:** anonymous GitHub API calls are
   limited to 60 per hour per IP address, which colleagues on one university
   network would share.
+- **Job logs:** GitHub serves a job's log only to an authenticated user, even
+  for a public repository. If the clang-tidy view says a log could not be
+  read, the workflow's `GITHUB_TOKEN` lacks that access. Then add a
+  fine-grained personal access token with read-only access to public
+  repositories as the secret `PUBLIC_READ_TOKEN`; the workflow uses it
+  instead.
 
 ## Repository layout
 

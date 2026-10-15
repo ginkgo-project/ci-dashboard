@@ -1,4 +1,5 @@
-"""python -m status COVERAGE OUTPUT: writes the latest results of Ginkgo's CI jobs."""
+"""python -m status COVERAGE OUTPUT: writes the latest results of Ginkgo's CI jobs
+and the clang-tidy findings of its open pull requests."""
 
 import argparse
 import datetime
@@ -9,7 +10,7 @@ from pathlib import Path
 
 from extract import hardware, schema
 
-from . import github, gitlab, merge
+from . import github, gitlab, merge, tidy
 from .fetch import FetchError, Fetcher
 
 # ginkgo-public-ci, and the public gitlab.com project CSCS mirrors its pipelines to
@@ -32,12 +33,16 @@ def collect(coverage: dict, fetcher, hw, now: datetime.datetime) -> dict:
     public_ci = gitlab.Project(fetcher, PROJECTS["gitlab"], "gitlab", hw)
     cscs = gitlab.Project(fetcher, PROJECTS["cscs"], "cscs", hw)
     histories = [public_ci.develop_history(shas, DEVELOP_PIPELINES), repo.develop_history(shas)]
+    pulls = tidy.Pulls(fetcher, REPO).collect(now)
     elsewhere = [
         public_ci.latest_elsewhere(wanted("gitlab"), ELSEWHERE_PIPELINES),
         cscs.latest_elsewhere(wanted("cscs"), ELSEWHERE_PIPELINES),
-        repo.latest_elsewhere(wanted("github")),
+        # the clang-tidy job runs in CI, not CI-Extra; its result comes from the pull requests
+        repo.latest_elsewhere(wanted("github") - {tidy.KEY}),
+        tidy.newest_result(pulls),
     ]
     doc = merge.assemble(coverage, commits, histories, elsewhere, now)
+    doc["clang_tidy"] = {"check": tidy.CHECK, "max_age_days": tidy.MAX_AGE.days, "pulls": pulls}
     schema.check_status(doc)
     return doc
 

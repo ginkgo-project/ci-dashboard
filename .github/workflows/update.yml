@@ -45,7 +45,9 @@ jobs:
       - name: Job results
         run: python -m status site/coverage.json site/status.json
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # reading Ginkgo's job logs, for the clang-tidy findings, needs a token
+          # with read access to public repositories; see the README
+          GITHUB_TOKEN: ${{ secrets.PUBLIC_READ_TOKEN || secrets.GITHUB_TOKEN }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
