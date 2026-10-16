@@ -1,10 +1,7 @@
-from datetime import datetime, timezone
-
 from status import tidy
 from tests.fakes import FakeFetcher, key
 
 API = "https://api.github.com/repos/o/r"
-NOW = datetime(2026, 10, 15, 12, 0, tzinfo=timezone.utc)
 WORKSPACE = "/home/runner/work/ginkgo/ginkgo"
 
 LOG = f"""﻿2026-10-15T13:12:44.8623293Z Current runner version: '2.337.0'
@@ -55,15 +52,16 @@ def check_runs(sha):
     return key(f"{API}/commits/{sha}/check-runs", {"check_name": tidy.CHECK})
 
 
+PULLS = [
+    pull(2124, "h1", "2026-10-14T19:40:18Z"),
+    pull(2120, "h2", "2026-10-10T08:00:00Z"),
+    pull(2110, "h3", "2026-10-01T08:00:00Z"),
+    pull(2105, "h4", "2026-09-30T08:00:00Z"),
+]
+
+
 def responses():
     return {
-        key(f"{API}/pulls", {"state": "open", "sort": "updated", "direction": "desc"}): [
-            pull(2124, "h1", "2026-10-14T19:40:18Z"),
-            pull(2120, "h2", "2026-10-10T08:00:00Z"),
-            pull(2110, "h3", "2026-10-01T08:00:00Z"),
-            pull(2105, "h4", "2026-09-30T08:00:00Z"),
-            pull(1900, "old", "2026-06-01T08:00:00Z"),
-        ],
         check_runs("h1"): {"check_runs": [run(501, "failure")]},
         f"{API}/actions/jobs/501/logs": LOG,
         check_runs("h2"): {"check_runs": [run(300, "failure"), run(400, "success", "2026-10-14T11:00:00Z")]},
@@ -73,12 +71,11 @@ def responses():
     }
 
 
-def test_collect_reads_the_findings_of_failed_runs_of_recent_pull_requests():
+def test_collect_reads_the_findings_of_failed_runs():
     fetcher = FakeFetcher(responses())
-    pulls = tidy.Pulls(fetcher, "o/r").collect(NOW)
+    pulls = tidy.Pulls(fetcher, "o/r").collect(PULLS)
     by_number = {pull["number"]: pull for pull in pulls}
     assert list(by_number) == [2124, 2120, 2110, 2105]
-    assert check_runs("old") not in fetcher.requested
 
     failed = by_number[2124]
     assert (failed["title"], failed["author"], failed["sha"]) == ("title 2124", "dev", "h1")
@@ -94,7 +91,7 @@ def test_collect_reads_the_findings_of_failed_runs_of_recent_pull_requests():
 
 
 def test_newest_result_is_the_last_finished_run():
-    pulls = tidy.Pulls(FakeFetcher(responses()), "o/r").collect(NOW)
+    pulls = tidy.Pulls(FakeFetcher(responses()), "o/r").collect(PULLS)
     newest = tidy.newest_result(pulls)
     assert list(newest) == [tidy.KEY]
     assert (newest[tidy.KEY]["status"], newest[tidy.KEY]["ref"]) == ("success", "PR #2120")

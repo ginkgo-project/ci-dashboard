@@ -4,11 +4,17 @@ import {
   STATUS_ORDER, effectiveStatus, countSettings, statusRows, summary,
   gridModel, chipLabel, supportedLines, ageLevel, shortSha, formatDuration, machineLabel, toolchainName,
   tidyPulls, groupFindings, checkTotals, checkDocsUrl, findingUrl,
+  coveragePulls, coverageHistory, chartModel, changedLinesText, formatChange, formatCount,
 } from "./logic.js";
 
 // pull: the pull request picked by #clang-tidy/NUMBER
 const state = { coverage: null, status: null, filters: {}, view: "status", pull: null };
-const VIEWS = { status: renderStatus, coverage: renderCoverage, supported: renderSupported, "clang-tidy": renderClangTidy };
+const VIEWS = {
+  status: renderStatus, coverage: renderCoverage, supported: renderSupported,
+  "clang-tidy": renderClangTidy, "code-coverage": renderCodeCoverage,
+};
+// the filters pick jobs; these views list pull requests and commits
+const WITHOUT_FILTERS = ["clang-tidy", "code-coverage"];
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -17,6 +23,18 @@ function el(tag, attrs = {}, ...children) {
     if (key === "class") node.className = value;
     else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
     else node.setAttribute(key, value === true ? "" : value);
+  }
+  for (const child of children.flat(Infinity)) {
+    if (child === undefined || child === null || child === false) continue;
+    node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return node;
+}
+
+function svg(tag, attrs = {}, ...children) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (value !== undefined && value !== null) node.setAttribute(key, value);
   }
   for (const child of children.flat(Infinity)) {
     if (child === undefined || child === null || child === false) continue;
@@ -287,10 +305,103 @@ function renderClangTidy(root) {
   if (state.pull) document.getElementById(`clang-tidy/${state.pull}`)?.scrollIntoView();
 }
 
+// drawn at the width of the page, so that its labels keep their size
+function coverageChart(reports, width) {
+  const model = chartModel(reports, { width: Math.max(560, width) });
+  const point = ({ x, y, report }) => {
+    const dot = svg("circle", { class: "point", cx: x, cy: y, r: 4 },
+      svg("title", {}, `${shortSha(report.sha)} ${report.title}: ${report.coverage}%`));
+    return isWebLink(report.url) ? svg("a", { href: report.url }, dot) : dot;
+  };
+  return el("div", { class: "scroll" }, svg("svg", {
+    class: "chart", viewBox: `0 0 ${model.width} ${model.height}`, role: "img",
+    "aria-label": "Line coverage of develop over time",
+  },
+  model.yTicks.map((tick) => [
+    svg("line", { class: "rule", x1: model.left, x2: model.width - model.right, y1: tick.y, y2: tick.y }),
+    svg("text", { class: "tick", x: model.left - 6, y: tick.y, "text-anchor": "end", "dominant-baseline": "middle" }, tick.label),
+  ]),
+  model.xTicks.map((tick) => svg("text", { class: "tick", x: tick.x, y: model.height - 8, "text-anchor": "middle" }, tick.label)),
+  svg("path", { class: "trend", d: model.path }),
+  model.points.map(point)));
+}
+
+function reportTable(reports) {
+  const head = ["Commit", "Date", "Title", "Coverage", "Covered lines", "Change, % points"];
+  return el("div", { class: "scroll" }, el("table", { class: "reports" },
+    el("thead", {}, el("tr", {}, head.map((h) => el("th", { scope: "col" }, h)))),
+    el("tbody", {}, reports.map((report) => el("tr", {},
+      el("th", { scope: "row" }, isWebLink(report.url) ? el("a", { href: report.url }, shortSha(report.sha)) : shortSha(report.sha)),
+      el("td", {}, new Date(report.date).toLocaleDateString()),
+      el("td", {}, report.title),
+      el("td", { class: "number" }, `${report.coverage.toFixed(2)}%`),
+      el("td", { class: "number" }, `${formatCount(report.hits)} of ${formatCount(report.lines)}`),
+      el("td", { class: "number" }, formatChange(report.change)))))));
+}
+
+function coverageDetail(pull) {
+  if (pull.codecov) return changedLinesText(pull.codecov.changed);
+  if (pull.status === "running" || pull.status === "pending") return "the coverage job is running";
+  if (pull.status === "failed") return "the coverage job failed";
+  if (pull.status === "canceled") return "the coverage job was canceled";
+  if (pull.status === "success") return "Codecov has no report for it yet";
+  return "no coverage run";
+}
+
+function coverageLine(pull) {
+  const numbers = pull.codecov;
+  return [
+    el("span", { class: `badge s-${pull.status}` }, pull.status), " ",
+    el("a", { href: pull.url }, `#${pull.number}`), ` ${pull.title}`,
+    pull.draft ? el("span", { class: "count" }, " (draft)") : null,
+    el("span", { class: "pull-detail" }, coverageDetail(pull)),
+    numbers ? el("span", { class: "pull-detail" }, `all lines ${numbers.coverage.toFixed(2)}%`
+      + (numbers.base_coverage === null || numbers.base_coverage === undefined ? "" : `, develop ${numbers.base_coverage.toFixed(2)}%`)) : null,
+    numbers && !numbers.base_has_report
+      ? el("span", { class: "pull-warning", title: "Its base commit has no report, so Codecov compared it with an older develop commit; the changed lines include what develop changed since." }, "compared with an older develop commit")
+      : null,
+    pull.result && isWebLink(pull.result.url) ? el("a", { class: "pull-link", href: pull.result.url }, "log") : null,
+    numbers && isWebLink(numbers.url) ? el("a", { class: "pull-link", href: numbers.url, title: "The covered and missed lines on Codecov" }, "Codecov") : null,
+  ];
+}
+
+function renderCodeCoverage(root) {
+  const coverage = state.status?.code_coverage;
+  if (!coverage) {
+    root.append(el("p", { class: "none" }, "No coverage results available."));
+    return;
+  }
+  const history = coverageHistory(state.status);
+  const newest = history.at(-1);
+  root.append(el("p", { class: "summary" }, newest
+    ? `develop: ${newest.coverage.toFixed(2)}% of ${formatCount(newest.lines)} lines covered at ${shortSha(newest.sha)}, ${new Date(newest.date).toLocaleDateString()}`
+    : `No coverage reports for develop in the last ${coverage.history_days} days.`));
+  root.append(el("p", { class: "legend" },
+    `Line coverage of the reference, OpenMP and MPI code, without the tests and the GPU backends. The job ${coverage.check} uploads it to Codecov on every push to develop, and on pull requests with the 1:ST:ready-to-merge or 1:ST:run-full-test label. `
+    + "Until October 2026 the reports came from a GitLab job, which also counted the code of the tests."));
+  if (history.length) {
+    root.append(el("h2", {}, `develop over the last ${coverage.history_days} days`), coverageChart(history, root.clientWidth),
+      el("h2", {}, "Newest reports"), reportTable(history.slice(-20).reverse()));
+  }
+  const pulls = coveragePulls(state.status);
+  const shown = pulls.filter((pull) => pull.codecov || pull.status !== "notrun");
+  const others = pulls.filter((pull) => !shown.includes(pull));
+  root.append(el("h2", {}, "Pull requests"), el("p", { class: "legend" },
+    `The open pull requests updated in the last ${coverage.max_age_days} days, with their coverage job on their newest commit and Codecov's numbers. `
+    + "The changed lines are the lines with code that a pull request adds or changes, compared with the develop commit it is based on."));
+  if (!shown.length) root.append(el("p", { class: "none" }, "No pull request has a coverage run."));
+  for (const pull of shown) root.append(el("div", { class: "pull" }, coverageLine(pull)));
+  if (others.length) {
+    root.append(el("details", { class: "pull" },
+      el("summary", {}, `${others.length} pull requests without a coverage run`),
+      el("ul", { class: "others" }, others.map((pull) => el("li", {},
+        el("a", { href: pull.url }, `#${pull.number}`), ` ${pull.title}`)))));
+  }
+}
+
 function render() {
   const filters = document.getElementById("filters");
-  // the filters pick jobs; the clang-tidy view lists pull requests
-  filters.hidden = state.view === "clang-tidy";
+  filters.hidden = WITHOUT_FILTERS.includes(state.view);
   if (!filters.hidden) renderFilters();
   for (const link of document.querySelectorAll("#tabs a")) {
     if (link.getAttribute("href") === `#${state.view}`) link.setAttribute("aria-current", "page");

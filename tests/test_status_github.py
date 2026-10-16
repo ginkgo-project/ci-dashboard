@@ -1,5 +1,7 @@
+from datetime import datetime, timezone
+
 from status import github
-from tests.fakes import FakeFetcher
+from tests.fakes import FakeFetcher, key
 
 API = "https://api.github.com/repos/o/r"
 
@@ -85,3 +87,11 @@ def test_latest_elsewhere_without_wanted_jobs_makes_no_requests():
     fetcher = FakeFetcher(responses())
     assert github.Repo(fetcher, "o/r").latest_elsewhere(set()) == {}
     assert fetcher.requested == []
+
+
+def test_open_pulls_leaves_out_the_ones_not_updated_since():
+    pulls = [{"number": n, "updated_at": updated} for n, updated in
+             [(3, "2026-10-14T19:40:18Z"), (2, "2026-09-01T00:00:00Z"), (1, "2026-06-01T08:00:00Z")]]
+    fetcher = FakeFetcher({key(f"{API}/pulls", {"state": "open", "sort": "updated", "direction": "desc"}): pulls})
+    since = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    assert [pull["number"] for pull in github.Repo(fetcher, "o/r").open_pulls(since)] == [3, 2]

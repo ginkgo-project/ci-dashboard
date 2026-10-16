@@ -33,9 +33,13 @@ def test_check_status():
     result = {"status": "success", "url": "https://x"}
     pull = {"number": 7, "title": "t", "url": "https://x/pull/7", "sha": "s", "updated_at": "t",
             "result": result, "findings": [{"path": "a.cpp", "line": 1, "check": "c", "message": "m"}]}
+    covered = {**pull, "codecov": {"coverage": 92.5, "base_has_report": True, "url": "https://x",
+                                   "changed": {"lines": 3, "hits": 2, "partials": 0, "misses": 1}}}
+    code_coverage = {"check": "coverage", "pulls": [covered], "develop": [
+        {"sha": "a", "date": "t", "coverage": 93, "lines": 3, "hits": 2, "url": "https://x"}]}
     good = {"generated_at": "t", "commits": [{"sha": "a"}],
             "jobs": {"k": {"history": [result], "elsewhere": None}}, "unmatched": [],
-            "clang_tidy": {"check": "clang-tidy", "pulls": [pull]}}
+            "clang_tidy": {"check": "clang-tidy", "pulls": [pull]}, "code_coverage": code_coverage}
     schema.check_status(good)
     bad = {**good, "jobs": {"k": {"history": [], "elsewhere": None}}}
     with pytest.raises(ValueError, match="k: history has 0 entries for 1 commits"):
@@ -45,3 +49,9 @@ def test_check_status():
     with pytest.raises(ValueError, match="pull request 7: line should be a int"):
         schema.check_status({**good, "clang_tidy": {"check": "clang-tidy", "pulls": [
             {**pull, "findings": [{"path": "a.cpp", "line": "1", "check": "c", "message": "m"}]}]}})
+    with pytest.raises(ValueError, match="report of a: coverage should be a int or float"):
+        schema.check_status({**good, "code_coverage": {**code_coverage, "develop": [
+            {**code_coverage["develop"][0], "coverage": "93"}]}})
+    with pytest.raises(ValueError, match="pull request 7: missing misses"):
+        schema.check_status({**good, "code_coverage": {**code_coverage, "pulls": [
+            {**covered, "codecov": {**covered["codecov"], "changed": {"lines": 3, "hits": 2, "partials": 0}}}]}})

@@ -2,15 +2,12 @@
 the lines a pull request changes; its findings are read from the job's log."""
 
 import re
-from datetime import datetime, timedelta
 
 from . import github
-from .fetch import FetchError, paged
+from .fetch import FetchError
 
 CHECK = "clang-tidy / clang-tidy on changed lines"
 KEY = f"github:{CHECK}"
-# older pull requests are left out
-MAX_AGE = timedelta(days=60)
 
 _TIMESTAMP = re.compile(r"^﻿?\d{4}-\d\d-\d\dT[\d:.]+Z ")
 _FINDING = re.compile(r"^(.+?):(\d+):(\d+): (warning|error): (.*) \[([^\]]+)\]$")
@@ -41,29 +38,20 @@ def parse_log(log: str) -> tuple[list[dict], int | None]:
     return findings, reported
 
 
-def _time(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
 class Pulls:
     def __init__(self, fetcher, repo: str):
         self.fetcher = fetcher
-        self.base = f"{github.API}/repos/{repo}"
+        self.repo = github.Repo(fetcher, repo)
 
-    def collect(self, now: datetime) -> list[dict]:
-        """The open pull requests updated within MAX_AGE, newest first, with
-        their latest clang-tidy result and its findings."""
-        pulls = paged(self.fetcher, f"{self.base}/pulls",
-                      {"state": "open", "sort": "updated", "direction": "desc"})
-        return [self.entry(pull) for pull in pulls if now - _time(pull["updated_at"]) <= MAX_AGE]
+    def collect(self, pulls: list[dict]) -> list[dict]:
+        """The pull requests with their latest clang-tidy result and its findings."""
+        return [self.entry(pull) for pull in pulls]
 
     def entry(self, pull: dict) -> dict:
         """findings is None when they are unknown: no finished run, or an
         unreadable log."""
         sha = pull["head"]["sha"]
-        runs = self.fetcher.json(f"{self.base}/commits/{sha}/check-runs",
-                                 {"check_name": CHECK})["check_runs"]
-        run = max(runs, key=lambda run: run["id"], default=None)
+        run = self.repo.newest_check_run(sha, CHECK)
         result = github.result(run, sha, f"PR #{pull['number']}") if run else None
         findings, reported = None, None
         if result and result["status"] == "success":
@@ -71,13 +59,11 @@ class Pulls:
         elif run and run.get("conclusion") == "failure":
             try:
                 findings, reported = parse_log(
-                    self.fetcher.text(f"{self.base}/actions/jobs/{run['id']}/logs"))
+                    self.fetcher.text(f"{self.repo.base}/actions/jobs/{run['id']}/logs"))
             except FetchError:
                 pass
-        return {"number": pull["number"], "title": pull["title"],
-                "author": (pull.get("user") or {}).get("login"), "url": pull["html_url"],
-                "draft": bool(pull.get("draft")), "updated_at": pull["updated_at"], "sha": sha,
-                "result": result, "findings": findings, "reported": reported}
+        return {**github.pull_fields(pull), "result": result, "findings": findings,
+                "reported": reported}
 
 
 def newest_result(pulls: list[dict]) -> dict[str, dict]:

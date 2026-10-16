@@ -1,7 +1,7 @@
 import datetime
 import json
 
-from status import merge, tidy
+from status import codecov, merge, tidy
 from status.__main__ import PROJECTS, collect, main
 from tests.fakes import FakeFetcher, key as request_key
 
@@ -9,6 +9,7 @@ NOW = datetime.datetime(2026, 10, 12, 8, 0, tzinfo=datetime.timezone.utc)
 GITLAB = f"https://gitlab.com/api/v4/projects/{PROJECTS['gitlab']}"
 CSCS = f"https://gitlab.com/api/v4/projects/{PROJECTS['cscs']}"
 GITHUB = "https://api.github.com/repos/ginkgo-project/ginkgo"
+CODECOV = "https://api.codecov.io/api/v2/github/ginkgo-project/repos/ginkgo"
 
 
 def r(status, sha="aaa"):
@@ -66,11 +67,16 @@ def responses():
         request_key(f"{GITHUB}/pulls", {"state": "open", "sort": "updated", "direction": "desc"}): [{
             "number": 2124, "title": "t", "user": {"login": "dev"}, "draft": False,
             "html_url": "https://github.com/ginkgo-project/ginkgo/pull/2124",
-            "updated_at": "2026-10-12T07:30:00Z", "head": {"sha": "ppp"}}],
+            "updated_at": "2026-10-12T07:30:00Z", "head": {"sha": "ppp"}, "base": {"sha": "aaa"}}],
         request_key(f"{GITHUB}/commits/ppp/check-runs", {"check_name": tidy.CHECK}): {"check_runs": [{
             "id": 9, "name": tidy.CHECK, "status": "completed", "conclusion": "success",
             "started_at": "2026-10-12T07:30:00Z", "completed_at": "2026-10-12T07:40:00Z",
             "html_url": "https://github.com/r/9"}]},
+        request_key(f"{GITHUB}/commits/ppp/check-runs", {"check_name": codecov.CHECK}): {"check_runs": []},
+        request_key(f"{CODECOV}/commits/", {"branch": "develop"}): {"next": None, "results": [{
+            "commitid": "aaa", "timestamp": "2026-10-12T07:00:00Z", "state": "complete", "message": "newest",
+            "totals": {"files": 5, "lines": 100, "hits": 93, "misses": 7, "partials": 0, "coverage": 93.0}}]},
+        request_key(f"{CODECOV}/pulls/", {"state": "open"}): {"next": None, "results": []},
     }
 
 
@@ -83,6 +89,9 @@ def test_collect(hw):
     # from the pull requests, without searching CI-Extra for it
     assert doc["jobs"][tidy.KEY]["elsewhere"]["ref"] == "PR #2124"
     assert [(pull["number"], pull["findings"]) for pull in doc["clang_tidy"]["pulls"]] == [(2124, [])]
+    assert [(commit["sha"], commit["coverage"]) for commit in doc["code_coverage"]["develop"]] == [("aaa", 93.0)]
+    assert [(pull["number"], pull["result"], pull["codecov"]) for pull in doc["code_coverage"]["pulls"]] == [
+        (2124, None, None)]
     assert doc["unmatched"] == []
 
 

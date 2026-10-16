@@ -6,7 +6,7 @@ Actions jobs.
 
 ## Goals
 
-The page answers three questions for Ginkgo maintainers:
+The page answers four questions for Ginkgo maintainers:
 
 1. **What does the CI cover?** Toolchain versions, debug or release, shared
    or static, MPI, OpenMP and precision options, and the hardware
@@ -17,6 +17,9 @@ The page answers three questions for Ginkgo maintainers:
 3. **What does clang-tidy find in a pull request?** Which checks fail on the
    lines each open pull request changes, with links to the lines and to the
    documentation of each check.
+4. **How much of the code do the tests cover?** The line coverage of
+   `develop` over the last year, and how many of the lines each open pull
+   request changes the tests run.
 
 So when someone changes the CI, the page shows what coverage was gained or
 lost. When `develop` is red, it lists the failing jobs and their reasons,
@@ -33,7 +36,7 @@ Ginkgo checkout (develop) --+
 hardware.yml               -+--> extract --> site/coverage.json --+
 environments.yml           -+                                     +--> site/ (static page)
 supported.yml              -+                                     |
-GitLab API, GitHub API -------> status ----> site/status.json ----+
+GitLab, GitHub, Codecov APIs -> status ----> site/status.json ----+
 ```
 
 - **`python -m extract`** reads a Ginkgo checkout's CI configuration into
@@ -61,9 +64,21 @@ GitLab API, GitHub API -------> status ----> site/status.json ----+
     the latest run of the `clang-tidy / clang-tidy on changed lines` job on
     its newest commit, and the findings parsed from the job's log. The log is
     read only when the job failed.
+  - **Line coverage:** from Codecov's public API, which needs no token. The
+    coverage job uploads to Codecov on every push to `develop` and on pull
+    requests with a full-test label.
+    - **`develop`:** each commit with a report from the last 365 days.
+    - **Pull requests:** for the same pull requests as clang-tidy, the latest
+      run of the coverage job on the newest commit, and Codecov's numbers:
+      the coverage of all lines, and how many of the changed lines are
+      covered.
+    - **Older base commits:** when the commit a pull request is based on has
+      no report, Codecov compares the pull request with an older `develop`
+      commit. Its changed lines then include what `develop` changed since, so
+      the page marks such pull requests.
 - **`site/`** is the page: `index.html`, `style.css`, `app.js`, and
   `logic.js`, which holds the pure functions the tests cover. It only reads
-  the two JSON files and makes no API calls. It has four views:
+  the two JSON files and makes no API calls. It has five views:
   - **Status:** the jobs on `develop`, failing ones first, with their recent
     history.
   - **Coverage:** a grid of toolchains against hardware.
@@ -72,6 +87,9 @@ GitLab API, GitHub API -------> status ----> site/status.json ----+
   - **clang-tidy:** the open pull requests, failing ones first, with their
     findings grouped by check. `#clang-tidy/NUMBER` opens the findings of one
     pull request.
+  - **Code coverage:** a chart and a table of `develop`'s line coverage, and
+    the open pull requests with their covered changed lines and links to
+    Codecov, which shows the lines that are not covered.
 
   The first three views can be filtered by CI, site, machine, pipeline, build
   options and result.

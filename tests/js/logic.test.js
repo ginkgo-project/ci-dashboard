@@ -288,3 +288,63 @@ test("links to the documentation of a check and to the line of a finding", () =>
     "https://github.com/o/r/blob/s2124/include/ginkgo/core/base/mpi.hpp#L444");
   assert.equal(logic.findingUrl(p, finding("x", 1, "/usr/include/x.h")), null);
 });
+
+const report = (sha, date, coverage) => ({ sha, date, title: sha, coverage, lines: 100, hits: Math.round(coverage), url: `https://x/${sha}` });
+const covered = (number, status, codecov, updated_at = "2026-10-10T00:00:00Z") => ({
+  number, title: `t${number}`, url: `https://github.com/o/r/pull/${number}`, sha: `s${number}`,
+  updated_at, result: status ? result(status) : null, codecov,
+});
+const numbers = { coverage: 92.67, base_coverage: 88.48, base_has_report: true, url: "https://x",
+  changed: { lines: 1038, hits: 930, partials: 0, misses: 108 } };
+
+test("coveragePulls puts pull requests with Codecov's numbers first, then running jobs", () => {
+  const coverageStatus = { code_coverage: { pulls: [
+    covered(1, null, null, "2026-10-14T00:00:00Z"),
+    covered(2, "failed", null),
+    covered(3, "running", null),
+    covered(4, "success", numbers, "2026-10-01T00:00:00Z"),
+    covered(5, "running", numbers, "2026-10-02T00:00:00Z"),
+  ] } };
+  assert.deepEqual(logic.coveragePulls(coverageStatus).map((p) => [p.number, p.status]),
+    [[5, "running"], [4, "success"], [3, "running"], [2, "failed"], [1, "notrun"]]);
+  assert.deepEqual(logic.coveragePulls({}), []);
+});
+
+test("coverageHistory puts develop's reports oldest first with their change", () => {
+  const history = logic.coverageHistory({ code_coverage: { develop: [
+    report("c", "2026-10-16T00:00:00Z", 92.67), report("b", "2026-10-06T00:00:00Z", 88.48), report("a", "2026-09-18T00:00:00Z", 88.47)] } });
+  assert.deepEqual(history.map((r) => [r.sha, r.change === null ? null : r.change.toFixed(2)]),
+    [["a", null], ["b", "0.01"], ["c", "4.19"]]);
+  assert.deepEqual(history.map((r) => logic.formatChange(r.change)), ["", "+0.01", "+4.19"]);
+  assert.equal(logic.formatChange(-0.394), "−0.39");
+  assert.equal(logic.formatChange(0.001), "0.00");
+});
+
+test("changedLinesText counts the covered changed lines", () => {
+  assert.equal(logic.changedLinesText(numbers.changed), "930 of 1,038 changed lines covered (89.6%)");
+  assert.equal(logic.changedLinesText({ lines: 4, hits: 2, partials: 1, misses: 1 }), "2 of 4 changed lines covered (50.0%), 1 partly");
+  assert.equal(logic.changedLinesText({ lines: 0, hits: 0, partials: 0, misses: 0 }), "changes no lines the tests can run");
+  assert.equal(logic.changedLinesText(null), "Codecov has not compared it with develop yet");
+});
+
+test("chartModel places the reports by date and coverage", () => {
+  const reports = [report("a", "2025-10-20T00:00:00Z", 88.12), report("b", "2026-04-20T00:00:00Z", 88.9), report("c", "2026-10-16T00:00:00Z", 92.67)];
+  const model = logic.chartModel(reports);
+  assert.deepEqual(model.points.map((p) => Math.round(p.x)), [48, 419, 784]);
+  // from 87% at the bottom of the plot to 94% at its top
+  assert.deepEqual(model.yTicks.map((t) => t.label), ["87%", "88%", "89%", "90%", "91%", "92%", "93%", "94%"]);
+  assert.equal(model.yTicks[0].y, 212);
+  assert.equal(model.yTicks.at(-1).y, 12);
+  // at most 6 month labels, with the year on the first one and on January
+  assert.deepEqual(model.xTicks.map((t) => t.label), ["Nov 2025", "Jan 2026", "Mar", "May", "Jul", "Sep"]);
+  assert.ok(model.path.startsWith("M48.0 "));
+  assert.equal(logic.chartModel([]), null);
+});
+
+test("chartModel with one report, or reports within a few weeks", () => {
+  const one = logic.chartModel([report("a", "2026-10-16T00:00:00Z", 92.67)]);
+  assert.equal(one.points[0].x, 416);
+  assert.deepEqual(one.xTicks.map((t) => t.label), ["16 Oct"]);
+  const weeks = logic.chartModel([report("a", "2026-10-02T00:00:00Z", 92), report("b", "2026-10-16T00:00:00Z", 93)]);
+  assert.deepEqual(weeks.xTicks.map((t) => t.label), ["2 Oct", "16 Oct"]);
+});

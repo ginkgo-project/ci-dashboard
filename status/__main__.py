@@ -1,5 +1,5 @@
-"""python -m status COVERAGE OUTPUT: writes the latest results of Ginkgo's CI jobs
-and the clang-tidy findings of its open pull requests."""
+"""python -m status COVERAGE OUTPUT: writes the latest results of Ginkgo's CI jobs,
+the clang-tidy findings of its open pull requests and its line coverage."""
 
 import argparse
 import datetime
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from extract import hardware, schema
 
-from . import github, gitlab, merge, tidy
+from . import codecov, github, gitlab, merge, tidy
 from .fetch import FetchError, Fetcher
 
 # ginkgo-public-ci, and the public gitlab.com project CSCS mirrors its pipelines to
@@ -19,6 +19,8 @@ REPO = "ginkgo-project/ginkgo"
 COMMITS = 10
 DEVELOP_PIPELINES = 20
 ELSEWHERE_PIPELINES = 50
+# older pull requests are left out
+PULL_MAX_AGE = datetime.timedelta(days=60)
 
 
 def collect(coverage: dict, fetcher, hw, now: datetime.datetime) -> dict:
@@ -33,7 +35,10 @@ def collect(coverage: dict, fetcher, hw, now: datetime.datetime) -> dict:
     public_ci = gitlab.Project(fetcher, PROJECTS["gitlab"], "gitlab", hw)
     cscs = gitlab.Project(fetcher, PROJECTS["cscs"], "cscs", hw)
     histories = [public_ci.develop_history(shas, DEVELOP_PIPELINES), repo.develop_history(shas)]
-    pulls = tidy.Pulls(fetcher, REPO).collect(now)
+    open_pulls = repo.open_pulls(now - PULL_MAX_AGE)
+    pulls = tidy.Pulls(fetcher, REPO).collect(open_pulls)
+    lines = codecov.Codecov(fetcher, REPO)
+    develop = lines.develop_history(now)
     elsewhere = [
         public_ci.latest_elsewhere(wanted("gitlab"), ELSEWHERE_PIPELINES),
         cscs.latest_elsewhere(wanted("cscs"), ELSEWHERE_PIPELINES),
@@ -42,7 +47,10 @@ def collect(coverage: dict, fetcher, hw, now: datetime.datetime) -> dict:
         tidy.newest_result(pulls),
     ]
     doc = merge.assemble(coverage, commits, histories, elsewhere, now)
-    doc["clang_tidy"] = {"check": tidy.CHECK, "max_age_days": tidy.MAX_AGE.days, "pulls": pulls}
+    doc["clang_tidy"] = {"check": tidy.CHECK, "max_age_days": PULL_MAX_AGE.days, "pulls": pulls}
+    doc["code_coverage"] = {"check": codecov.CHECK, "max_age_days": PULL_MAX_AGE.days,
+                            "history_days": codecov.HISTORY.days, "develop": develop,
+                            "pulls": lines.pulls(open_pulls, develop)}
     schema.check_status(doc)
     return doc
 

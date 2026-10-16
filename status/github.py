@@ -43,6 +43,14 @@ def result(run: dict, sha: str, ref: str) -> dict:
     }
 
 
+def pull_fields(pull: dict) -> dict:
+    """What the page shows of a pull request."""
+    return {"number": pull["number"], "title": pull["title"],
+            "author": (pull.get("user") or {}).get("login"), "url": pull["html_url"],
+            "draft": bool(pull.get("draft")), "updated_at": pull["updated_at"],
+            "sha": pull["head"]["sha"]}
+
+
 class Repo:
     def __init__(self, fetcher, repo: str):
         self.fetcher = fetcher
@@ -68,6 +76,17 @@ class Repo:
             if len(commits) == count:
                 break
         return commits
+
+    def open_pulls(self, since: datetime) -> list[dict]:
+        """The open pull requests updated since, the most recently updated first."""
+        pulls = paged(self.fetcher, f"{self.base}/pulls",
+                      {"state": "open", "sort": "updated", "direction": "desc"})
+        return [pull for pull in pulls if _time(pull["updated_at"]) >= since]
+
+    def newest_check_run(self, sha: str, name: str) -> dict | None:
+        runs = self.fetcher.json(f"{self.base}/commits/{sha}/check-runs",
+                                 {"check_name": name})["check_runs"]
+        return max(runs, key=lambda run: run["id"], default=None)
 
     def check_runs(self, sha: str) -> dict[str, dict]:
         """The newest check run of each name. Skipped jobs whose name GitHub

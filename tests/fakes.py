@@ -5,7 +5,7 @@ import urllib.parse
 
 from status.fetch import FetchError
 
-IGNORED_PARAMS = ("per_page", "page")
+IGNORED_PARAMS = ("per_page", "page", "page_size")
 
 
 def key(url: str, params: dict | None = None) -> str:

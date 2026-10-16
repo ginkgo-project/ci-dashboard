@@ -164,4 +164,18 @@ a.mark:hover, a.mark:focus-visible { box-shadow: 0 0 0 3px var(--line); }
 .findings { margin: 0; padding-left: 20px; font-size: 0.85rem; }
 .findings .where { font-family: ui-monospace, monospace; font-size: 0.8rem; margin-right: 6px; }
 
+.pull-warning { color: var(--cancel); margin-left: 8px; font-size: 0.85rem; }
+.others { margin: 4px 0; padding-left: 20px; font-size: 0.85rem; }
+
+/* scrolls inside .scroll on narrow screens, so the axis labels stay readable */
+.chart { display: block; width: 100%; min-width: 560px; height: auto; }
+.chart .rule { stroke: var(--line); }
+.chart .tick { fill: var(--muted); font-size: 12px; }
+.chart .trend { fill: none; stroke: var(--run); stroke-width: 2; }
+.chart .point { fill: var(--run); }
+.chart a:hover .point, .chart a:focus-visible .point { fill: var(--accent); }
+.reports { min-width: 760px; }
+.reports .number { text-align: right; white-space: nowrap; }
+.reports tbody th { font-weight: normal; font-family: ui-monospace, monospace; font-size: 0.8rem; }
+
 .foot { margin-top: 32px; color: var(--muted); font-size: 0.8rem; }

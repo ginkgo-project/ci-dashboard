@@ -341,3 +341,94 @@ export function findingUrl(pull, finding) {
   if (!repo || finding.path.startsWith("/")) return null;
   return `${repo[1]}/blob/${pull.sha}/${finding.path}#L${finding.line}`;
 }
+
+// pull requests whose coverage job is still going come right after the ones
+// with Codecov's numbers
+const COVERAGE_ORDER = ["running", "pending", "failed", "canceled", "success", "notrun"];
+
+// The open pull requests with the status of their coverage job: the ones with
+// Codecov's numbers first, then by status, then the most recently updated.
+export function coveragePulls(status) {
+  return (status?.code_coverage?.pulls ?? [])
+    .map((pull) => ({ ...pull, status: effectiveStatus(pull.result) }))
+    .sort((a, b) => Boolean(b.codecov) - Boolean(a.codecov)
+      || COVERAGE_ORDER.indexOf(a.status) - COVERAGE_ORDER.indexOf(b.status)
+      || Date.parse(b.updated_at) - Date.parse(a.updated_at));
+}
+
+// develop's reports, oldest first, each with its change from the one before
+// in percentage points
+export function coverageHistory(status) {
+  const reports = [...(status?.code_coverage?.develop ?? [])].reverse();
+  return reports.map((report, i) => ({ ...report, change: i ? report.coverage - reports[i - 1].coverage : null }));
+}
+
+export const formatCount = (count) => count.toLocaleString("en-US");
+
+export function formatChange(change) {
+  if (change === null) return "";
+  const rounded = change.toFixed(2);
+  return Number(rounded) > 0 ? `+${rounded}` : Number(rounded) < 0 ? `−${rounded.slice(1)}` : "0.00";
+}
+
+export function changedLinesText(changed) {
+  if (!changed) return "Codecov has not compared it with develop yet";
+  if (!changed.lines) return "changes no lines the tests can run";
+  const percent = ((100 * changed.hits) / changed.lines).toFixed(1);
+  const partly = changed.partials ? `, ${formatCount(changed.partials)} partly` : "";
+  return `${formatCount(changed.hits)} of ${formatCount(changed.lines)} changed lines covered (${percent}%)${partly}`;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAY = 86_400_000;
+
+// a step for the percent axis that gives at most 8 ticks
+function percentStep(range) {
+  return [1, 2, 5, 10, 20].find((step) => range / step <= 8) ?? 25;
+}
+
+// Labels along the time axis: the first day of every month, or of every
+// few months so that at most 6 fit; with less than two months in range,
+// the first and last day.
+function timeTicks(start, end) {
+  const first = new Date(start);
+  const months = [];
+  for (let month = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 1)); month <= end;
+    month = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 1))) {
+    months.push(month);
+  }
+  if (months.length < 2) {
+    const day = (time) => { const d = new Date(time); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; };
+    return end - start < DAY ? [{ time: start, label: day(start) }]
+      : [{ time: start, label: day(start) }, { time: end, label: day(end) }];
+  }
+  const every = Math.ceil(months.length / 6);
+  return months.filter((_, i) => i % every === 0).map((month) => ({
+    time: month.getTime(),
+    label: month.getUTCMonth() === 0 || month === months[0]
+      ? `${MONTHS[month.getUTCMonth()]} ${month.getUTCFullYear()}` : MONTHS[month.getUTCMonth()],
+  }));
+}
+
+// The develop chart in a width x height box: one point per report, placed
+// by date and coverage, the percent axis on the left and the dates below.
+export function chartModel(reports, { width = 800, height = 240, left = 48, right = 16, top = 12, bottom = 28 } = {}) {
+  if (!reports.length) return null;
+  const times = reports.map((report) => Date.parse(report.date));
+  const values = reports.map((report) => report.coverage);
+  const low = Math.max(0, Math.floor(Math.min(...values)) - 1);
+  const high = Math.min(100, Math.ceil(Math.max(...values)) + 1);
+  const start = Math.min(...times);
+  const end = Math.max(...times);
+  const x = (time) => left + (end > start ? (time - start) / (end - start) : 0.5) * (width - left - right);
+  const y = (value) => top + ((high - value) / (high - low)) * (height - top - bottom);
+  const points = reports.map((report, i) => ({ x: x(times[i]), y: y(values[i]), report }));
+  const step = percentStep(high - low);
+  const yTicks = [];
+  for (let value = Math.ceil(low / step) * step; value <= high; value += step) yTicks.push({ y: y(value), label: `${value}%` });
+  return {
+    width, height, left, right, top, bottom, points, yTicks,
+    xTicks: timeTicks(start, end).map((tick) => ({ x: x(tick.time), label: tick.label })),
+    path: points.map((point, i) => `${i ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" "),
+  };
+}
