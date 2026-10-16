@@ -35,6 +35,7 @@ def test_jobs_and_their_pipelines(extracted):
         "github:windows-msvc / msvc/windows-latest": ["develop", "pr-quick", "pr-full"],
         "github:linux-gcc-cuda / gcc/cuda-13.3/release/shared (only compile)": ["develop", "pr-quick"],
         "github:clang-tidy / clang-tidy on changed lines": ["pr-quick"],
+        "github:coverage / coverage of the reference, OpenMP and MPI code": ["develop", "pr-full"],
         "github:arm / arm/omp/release/static": ["pr-full"],
         "github:windows-msvc / msvc/windows-2022": ["pr-full"],
         "github:mirror / to_gitlab": ["develop"],

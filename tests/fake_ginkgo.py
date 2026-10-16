@@ -191,6 +191,9 @@ jobs:
     if: >-
       ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, '1:ST:SKIP_ALL_CI') }}
     uses: ./.github/workflows/clang-tidy.yml
+  coverage:
+    if: ${{ github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/coverage.yml
 """
 
 # configures for the compilation database only, and runs on pull requests only
@@ -207,6 +210,20 @@ jobs:
       - run: git diff -U0 HEAD^1 HEAD | clang-tidy-diff-18.py -p1 -path build
 """
 
+# CI runs it on pushes only, CI-Extra on pull requests
+COVERAGE = """
+on:
+  workflow_call:
+jobs:
+  coverage:
+    name: coverage of the reference, OpenMP and MPI code
+    runs-on: [ubuntu-24.04]
+    steps:
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DGINKGO_BUILD_OMP=ON -DGINKGO_BUILD_MPI=ON
+      - run: cmake --build build -j4
+      - run: ctest --test-dir build -j4
+"""
+
 CI_EXTRA = """
 name: CI-Extra
 on:
@@ -220,6 +237,8 @@ jobs:
     uses: ./.github/workflows/windows-msvc.yml
     with:
       full: true
+  coverage:
+    uses: ./.github/workflows/coverage.yml
 """
 
 ARM = """
@@ -347,6 +366,7 @@ FILES = {
     ".github/workflows/windows-msvc.yml": WINDOWS,
     ".github/workflows/linux-gcc-cuda.yml": LINUX_CUDA,
     ".github/workflows/clang-tidy.yml": CLANG_TIDY,
+    ".github/workflows/coverage.yml": COVERAGE,
     ".github/workflows/mirror-develop.yml": MIRROR_DEVELOP,
     ".github/workflows/mirror-major.yml": MIRROR_MAJOR,
     ".github/workflows/mirror.yml": MIRROR,

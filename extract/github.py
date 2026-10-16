@@ -60,9 +60,16 @@ def matrix_combinations(matrix, full: bool | None) -> list[dict]:
             for combination in itertools.product(*(axes[key] for key in keys))]
 
 
-def pull_request_only(job: dict) -> bool:
-    """A job whose condition requires a pull request, e.g. clang-tidy on the changed lines."""
-    return "github.event_name=='pull_request'" in str(job.get("if", "")).replace(" ", "")
+def by_event(job: dict, pipelines: list[str]) -> list[str]:
+    """The pipelines left by a condition on the event: pull requests only, e.g. clang-tidy
+    on the changed lines, or pushes only, e.g. coverage, which CI-Extra runs for
+    pull requests."""
+    condition = str(job.get("if", "")).replace(" ", "")
+    if "github.event_name=='pull_request'" in condition:
+        return [p for p in pipelines if p != "develop"]
+    if "github.event_name!='pull_request'" in condition:
+        return [p for p in pipelines if p == "develop"]
+    return pipelines
 
 
 def runs_with(job: dict, full: bool | None) -> bool:
@@ -113,8 +120,7 @@ def extract(root: Path, hw: Hardware, env: dict) -> tuple[list[Job], list[str]]:
             for prefix, job_id, job, full in targets:
                 if not runs_with(job, full):
                     continue
-                runs_in = ([p for p in pipelines if p != "develop"]
-                           if pull_request_only(caller) or pull_request_only(job) else pipelines)
+                runs_in = by_event(job, by_event(caller, pipelines))
                 for matrix in matrix_combinations((job.get("strategy") or {}).get("matrix"), full):
                     record = _build_job(prefix, job_id, job, matrix, hw, env, warnings)
                     existing = jobs.setdefault(record.key, record)
