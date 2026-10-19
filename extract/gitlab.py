@@ -21,6 +21,7 @@ RULES_TEMPLATES = {
     ".full_test_condition": ["develop", "pr-full"],
     ".full_test_short_lived_condition": ["pr-full"],
     ".deploy_condition": ["develop"],
+    ".develop_condition": ["develop"],
     ".pr_condition": ["pr-quick", "pr-full"],
     ".pr_trigger_condition": ["pr-quick"],
     ".disable_job_condition": [],
