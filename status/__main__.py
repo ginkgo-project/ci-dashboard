@@ -34,7 +34,8 @@ def collect(coverage: dict, fetcher, hw, now: datetime.datetime) -> dict:
     shas = [commit["sha"] for commit in commits]
     public_ci = gitlab.Project(fetcher, PROJECTS["gitlab"], "gitlab", hw)
     cscs = gitlab.Project(fetcher, PROJECTS["cscs"], "cscs", hw)
-    histories = [public_ci.develop_history(shas, DEVELOP_PIPELINES), repo.develop_history(shas)]
+    histories = [public_ci.develop_history(shas, DEVELOP_PIPELINES),
+                 cscs.develop_history(shas, DEVELOP_PIPELINES), repo.develop_history(shas)]
     open_pulls = repo.open_pulls(now - PULL_MAX_AGE)
     pulls = tidy.Pulls(fetcher, REPO).collect(open_pulls)
     lines = codecov.Codecov(fetcher, REPO)

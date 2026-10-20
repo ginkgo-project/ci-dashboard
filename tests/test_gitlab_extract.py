@@ -127,6 +127,40 @@ def test_cscs_job_uses_the_template_machine_and_the_uenv(ginkgo, hw, env):
     assert (job.linkage, job.omp, job.compile_only) == ("static", True, False)
 
 
+BRANCH_RULES = """
+.daint:
+  extends: .baremetal-runner-daint-gh200
+  stage: test
+  rules:
+    - if: $CI_COMMIT_REF_NAME != "develop"
+  script:
+    - uenv run ${UENV} -- bash ../.gitlab/run-ctest.sh
+
+pull-requests:
+  extends: .daint
+
+develop-only:
+  extends: .daint
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "develop"
+
+other-rules:
+  extends: .daint
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "develop"
+      when: manual
+"""
+
+
+def test_rules_that_check_for_develop(tmp_path, hw, env):
+    root = fake_ginkgo.write(tmp_path / "ginkgo", {".gitlab/cscs.yml": BRANCH_RULES})
+    jobs, _ = gitlab.extract(root, ".gitlab/cscs.yml", "cscs", hw, env, ["pr-cscs"])
+    assert {job.name: job.pipelines for job in jobs} == {
+        "pull-requests": ["pr-cscs"], "develop-only": ["develop"], "other-rules": ["custom"]}
+    assert gitlab.rules_pipelines([{"if": '$CI_COMMIT_REF_NAME != "develop"'}], DEFAULT) == [
+        "pr-quick", "pr-full"]
+
+
 RULES_ORDER = """
 .deploy_condition:
   rules:

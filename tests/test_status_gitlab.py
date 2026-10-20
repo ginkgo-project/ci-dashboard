@@ -80,6 +80,25 @@ def test_develop_history_uses_the_newest_pipeline_per_commit(hw):
     assert f"{API}/pipelines/29/jobs" not in fetcher.requested
 
 
+def test_develop_history_skips_the_empty_twin_of_a_cscs_pipeline(hw):
+    fetcher = FakeFetcher({
+        f"{API}/pipelines?ref=develop": [
+            {"id": 41, "sha": "aaa", "ref": "develop", "status": "skipped"},
+            {"id": 40, "sha": "aaa", "ref": "develop", "status": "success"},
+            {"id": 39, "sha": "bbb", "ref": "develop", "status": "skipped"},
+        ],
+        f"{API}/pipelines/40/jobs": [job(401, "beverin/x", "success", runner=None)],
+        f"{API}/pipelines/40/test_report_summary": {"test_suites": []},
+        f"{API}/pipelines/39/jobs": [],
+        f"{API}/pipelines/39/test_report_summary": {"test_suites": []},
+    })
+    history = gitlab.Project(fetcher, 1, "cscs", hw).develop_history(["aaa", "bbb"], 20)
+    assert list(history) == ["cscs:beverin/x"]
+    assert list(history["cscs:beverin/x"]) == ["aaa"]
+    assert history["cscs:beverin/x"]["aaa"]["status"] == "success"
+    assert f"{API}/pipelines/41/jobs" not in fetcher.requested
+
+
 def test_latest_elsewhere_skips_develop_and_skipped_pipelines(hw):
     fetcher = FakeFetcher(responses())
     found = gitlab.Project(fetcher, 1, "gitlab", hw).latest_elsewhere(

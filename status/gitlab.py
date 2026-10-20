@@ -78,11 +78,16 @@ class Project:
 
     def develop_history(self, shas: list[str], count: int) -> dict[str, dict[str, dict]]:
         """key -> sha -> result, from the newest develop pipeline of each commit.
-        Logs are read for the newest commit only."""
+        A skipped pipeline only counts if the commit has no other one: CSCS's
+        mirror gets an empty, skipped pipeline for each push next to the one
+        that runs the jobs. Logs are read for the newest commit only."""
+        def rank(pipeline: dict) -> tuple[bool, int]:
+            return pipeline["status"] != "skipped", pipeline["id"]
+
         newest: dict[str, dict] = {}
         for pipeline in self.pipelines("develop", count):
             sha = pipeline["sha"]
-            if sha in shas and (sha not in newest or pipeline["id"] > newest[sha]["id"]):
+            if sha in shas and (sha not in newest or rank(pipeline) > rank(newest[sha])):
                 newest[sha] = pipeline
         history: dict[str, dict[str, dict]] = {}
         for sha, pipeline in newest.items():

@@ -23,6 +23,7 @@ def coverage_job(key, pipelines):
 COVERAGE = {"jobs": [
     coverage_job("gitlab:build/a", ["develop", "pr-full"]),
     coverage_job("cscs:daint/x", ["pr-cscs"]),
+    coverage_job("cscs:beverin/2-nodes", ["develop"]),
     coverage_job("github:arm / a", ["develop", "pr-quick"]),
     coverage_job(tidy.KEY, ["pr-quick"]),
 ]}
@@ -61,6 +62,10 @@ def responses():
         f"{GITLAB}/pipelines?ref=develop": [{"id": 5, "sha": "aaa", "ref": "develop", "status": "success"}],
         f"{GITLAB}/pipelines/5/jobs": [gitlab_job(51, "build/a", "success")],
         f"{GITLAB}/pipelines/5/test_report_summary": {"test_suites": []},
+        f"{CSCS}/pipelines?ref=develop": [{"id": 9, "sha": "aaa", "ref": "develop", "status": "skipped"},
+                                          {"id": 8, "sha": "aaa", "ref": "develop", "status": "success"}],
+        f"{CSCS}/pipelines/8/jobs": [gitlab_job(81, "beverin/2-nodes", "success")],
+        f"{CSCS}/pipelines/8/test_report_summary": {"test_suites": []},
         f"{CSCS}/pipelines": [{"id": 7, "sha": "ccc", "ref": "__CSCSCI__pr2114", "status": "success"}],
         f"{CSCS}/pipelines/7/jobs": [gitlab_job(71, "daint/x", "success")],
         f"{CSCS}/pipelines/7/test_report_summary": {"test_suites": []},
@@ -86,6 +91,7 @@ def test_collect(hw):
     assert doc["jobs"]["gitlab:build/a"]["history"][0]["status"] == "success"
     assert doc["jobs"]["github:arm / a"]["history"][0]["status"] == "success"
     assert doc["jobs"]["cscs:daint/x"]["elsewhere"]["ref"] == "PR #2114"
+    assert doc["jobs"]["cscs:beverin/2-nodes"]["history"][0]["status"] == "success"
     # from the pull requests, without searching CI-Extra for it
     assert doc["jobs"][tidy.KEY]["elsewhere"]["ref"] == "PR #2124"
     assert [(pull["number"], pull["findings"]) for pull in doc["clang_tidy"]["pulls"]] == [(2124, [])]
@@ -103,6 +109,7 @@ def test_main_writes_the_file(tmp_path, config_dir):
                 fetcher=FakeFetcher(responses()))
     assert code == 0
     assert set(json.loads(output.read_text())["jobs"]) == {"gitlab:build/a", "cscs:daint/x",
+                                                            "cscs:beverin/2-nodes",
                                                             "github:arm / a", tidy.KEY}
 
 

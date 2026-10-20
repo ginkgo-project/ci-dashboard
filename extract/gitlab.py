@@ -92,14 +92,27 @@ def rules_template(chain: list[str]) -> str | None:
     return next((t for t in reversed(chain) if t in RULES_TEMPLATES), None)
 
 
+def rules_pipelines(rules, default: list[str]) -> list[str]:
+    """The pipelines of rules that only check whether the ref is develop, as in
+    .gitlab/cscs.yml; any other rules are "custom"."""
+    if (isinstance(rules, list) and len(rules) == 1 and isinstance(rules[0], dict)
+            and set(rules[0]) == {"if"}):
+        condition = " ".join(str(rules[0]["if"]).split())
+        if condition == '$CI_COMMIT_REF_NAME == "develop"':
+            return ["develop"]
+        if condition == '$CI_COMMIT_REF_NAME != "develop"':
+            return [pipeline for pipeline in default if pipeline != "develop"]
+    return ["custom"]
+
+
 def pipelines_of(own: dict, merged: dict, chain: list[str], default: list[str]) -> list[str]:
     if "rules" in own:
-        return ["custom"]
+        return rules_pipelines(own["rules"], default)
     template = rules_template(chain)
     if template:
         return list(RULES_TEMPLATES[template])
     if "rules" in merged:
-        return ["custom"]
+        return rules_pipelines(merged["rules"], default)
     only = merged.get("only")
     if only is not None:
         refs = only if isinstance(only, list) else only.get("refs", [])
