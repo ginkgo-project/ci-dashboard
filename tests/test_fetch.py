@@ -61,6 +61,31 @@ def test_github_token_is_only_sent_to_github():
                     "https://gitlab.com/api/v4/b": None}
 
 
+def test_gitlab_token_is_only_sent_to_the_gitlab_api():
+    seen = {}
+
+    def opener(request, timeout):
+        seen[request.full_url] = request.get_header("Private-token")
+        return io.BytesIO(b"[]")
+
+    fetcher = Fetcher(gitlab_token="secret", opener=opener, sleep=None)
+    fetcher.json("https://gitlab.com/api/v4/a")
+    fetcher.json("https://gitlab.com/b")
+    fetcher.json("https://api.github.com/c")
+    assert seen == {"https://gitlab.com/api/v4/a": "secret",
+                    "https://gitlab.com/b": None,
+                    "https://api.github.com/c": None}
+
+
+def test_a_rate_limit_error_names_the_limit():
+    def opener(request, timeout):
+        headers = {"RateLimit-Name": "unauthenticated_traffic_per_ip", "Retry-After": "538"}
+        raise urllib.error.HTTPError(request.full_url, 429, "Too Many Requests", headers, None)
+
+    with pytest.raises(FetchError, match="unauthenticated_traffic_per_ip, retry after 538 s"):
+        Fetcher(opener=opener, sleep=lambda seconds: None).json("https://gitlab.com/api/v4/x")
+
+
 def test_github_token_is_not_sent_on_redirects():
     requests = []
 

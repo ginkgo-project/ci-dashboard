@@ -66,7 +66,8 @@ def main(argv: list[str] | None = None, fetcher=None) -> int:
     args = parser.parse_args(argv)
     coverage = json.loads(args.coverage.read_text())
     hw = hardware.load(args.config_dir / "hardware.yml")
-    fetcher = fetcher or Fetcher(github_token=os.environ.get("GITHUB_TOKEN"))
+    fetcher = fetcher or Fetcher(github_token=os.environ.get("GITHUB_TOKEN"),
+                                 gitlab_token=os.environ.get("GITLAB_TOKEN"))
     try:
         doc = collect(coverage, fetcher, hw, datetime.datetime.now(datetime.timezone.utc))
     except FetchError as error:

@@ -14,12 +14,21 @@ class FetchError(RuntimeError):
     pass
 
 
+def _describe(error: Exception) -> str:
+    """The error, naming the limit that caused it if it is a rate limit."""
+    if getattr(error, "code", None) != 429 or not error.headers:
+        return str(error)
+    return f"{error} ({error.headers.get('RateLimit-Name')}, retry after {error.headers.get('Retry-After')} s)"
+
+
 class Fetcher:
     """Reads URLs; retries a failed request 3 times, waiting 2, 4 and 8 s."""
 
-    def __init__(self, github_token: str | None = None, retries: int = 3, wait: float = 2.0,
+    def __init__(self, github_token: str | None = None, gitlab_token: str | None = None,
+                 retries: int = 3, wait: float = 2.0,
                  opener=urllib.request.urlopen, sleep=time.sleep):
         self.github_token = github_token
+        self.gitlab_token = gitlab_token
         self.retries = retries
         self.wait = wait
         self.opener = opener
@@ -32,6 +41,8 @@ class Fetcher:
         # not sent on redirects: job logs redirect to blob storage, which rejects the token
         if self.github_token and url.startswith("https://api.github.com/"):
             request.add_unredirected_header("Authorization", f"Bearer {self.github_token}")
+        if self.gitlab_token and url.startswith("https://gitlab.com/api/"):
+            request.add_unredirected_header("PRIVATE-TOKEN", self.gitlab_token)
         error: Exception | None = None
         for attempt in range(self.retries + 1):
             if attempt:
@@ -45,7 +56,7 @@ class Fetcher:
                     break
             except (urllib.error.URLError, TimeoutError, ConnectionError) as network_error:
                 error = network_error
-        raise FetchError(f"{url}: {error}")
+        raise FetchError(f"{url}: {_describe(error)}")
 
     def json(self, url: str, params: dict | None = None):
         return json.loads(self._request(url, params))

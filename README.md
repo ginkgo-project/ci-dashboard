@@ -104,6 +104,12 @@ to GitHub Pages every 30 minutes, on pushes to `main` and by hand.
 - **Why the workflow fetches the data:** anonymous GitHub API calls are
   limited to 60 per hour per IP address, which colleagues on one university
   network would share.
+- **GitLab token:** GitLab allows 60 anonymous requests per hour per IP address,
+  about what one run needs. So the workflow reads GitLab with a personal access
+  token with the `read_api` scope, from the secret `GITLAB_TOKEN`. It can't be a
+  project access token, which can't read the second project. The token expires
+  after a year at most; then the run fails and the page goes stale until it is
+  replaced.
 - **Job logs:** GitHub serves a job's log only to an authenticated user, even
   for a public repository. If the clang-tidy view says a log could not be
   read, the workflow's `GITHUB_TOKEN` lacks that access. Then add a
@@ -145,12 +151,14 @@ adding entries to these files.
 python3 -m venv .venv && .venv/bin/pip install pyyaml pytest
 .venv/bin/python -m pytest && node --test tests/js/*.test.js
 .venv/bin/python -m extract /path/to/ginkgo site/coverage.json
-GITHUB_TOKEN=$(gh auth token) .venv/bin/python -m status site/coverage.json site/status.json
+GITHUB_TOKEN=$(gh auth token) GITLAB_TOKEN=your-token .venv/bin/python -m status site/coverage.json site/status.json
 .venv/bin/python -m http.server 8000 --directory site   # http://localhost:8000
 ```
 
 Without `GITHUB_TOKEN`, GitHub allows 60 API calls per hour, which is enough for
-about two runs.
+about two runs. Without `GITLAB_TOKEN`, GitLab allows 60 requests per hour, which
+may not be enough for one, and a run that hits the limit blocks the IP address
+for about an hour.
 
 `GINKGO_DIR=/path/to/ginkgo .venv/bin/python -m pytest tests/test_real_ginkgo.py -s`
 runs the extractor on a real checkout and prints its warnings.

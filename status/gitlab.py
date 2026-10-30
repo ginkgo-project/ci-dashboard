@@ -62,7 +62,7 @@ class Project:
         if (read_log and job["status"] == "failed"
                 and job.get("failure_reason") in (None, "script_failure", "unknown_failure")):
             try:
-                log = self.fetcher.text(job["web_url"] + "/raw")[-LOG_TAIL:]
+                log = self.fetcher.text(f"{self.base}/jobs/{job['id']}/trace")[-LOG_TAIL:]
             except FetchError:
                 log = None
         return reasons.classify(job["status"], job.get("failure_reason"), log)

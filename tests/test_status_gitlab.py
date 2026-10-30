@@ -28,7 +28,7 @@ def responses():
         ],
         f"{API}/pipelines/30/test_report_summary": {"test_suites": [
             {"name": "build/b", "total_count": 10, "failed_count": 1, "error_count": 1}]},
-        "https://gitlab.com/g/p/-/jobs/301/raw":
+        f"{API}/jobs/301/trace":
             "ninja: build stopped\nld: final link failed: No space left on device\n",
         f"{API}/pipelines/20/jobs": [
             job(201, "build/a", "failed", runner="ginkgo-cluster-meta-runner-nvidia_l40s",

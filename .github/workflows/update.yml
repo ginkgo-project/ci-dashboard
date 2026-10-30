@@ -48,6 +48,8 @@ jobs:
           # reading Ginkgo's job logs, for the clang-tidy findings, needs a token
           # with read access to public repositories; see the README
           GITHUB_TOKEN: ${{ secrets.PUBLIC_READ_TOKEN || secrets.GITHUB_TOKEN }}
+          # GitLab allows 60 anonymous requests per hour, about what a run needs; see the README
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
