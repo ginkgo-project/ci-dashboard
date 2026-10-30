@@ -1,5 +1,6 @@
 """HTTP for the status fetcher: JSON and text with retries, and pagination."""
 
+import http.client
 import json
 import time
 import urllib.error
@@ -54,7 +55,8 @@ class Fetcher:
                 error = http_error
                 if http_error.code in NO_RETRY:
                     break
-            except (urllib.error.URLError, TimeoutError, ConnectionError) as network_error:
+            # urlopen only wraps errors of opening the request, not of reading the body
+            except (OSError, http.client.HTTPException) as network_error:
                 error = network_error
         raise FetchError(f"{url}: {_describe(error)}")
 

@@ -1,4 +1,6 @@
+import http.client
 import io
+import ssl
 import urllib.error
 import urllib.request
 
@@ -45,6 +47,42 @@ def test_gives_up_after_three_retries():
     with pytest.raises(FetchError, match="connection refused"):
         Fetcher(opener=opener, sleep=lambda seconds: None).text("https://gitlab.com/x")
     assert len(calls) == 4
+
+
+class CutOff:
+    """A response whose connection drops while its body is read."""
+
+    def __init__(self, error):
+        self.error = error
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *details):
+        return False
+
+    def read(self):
+        raise self.error
+
+
+@pytest.mark.parametrize("error", [http.client.IncompleteRead(b"", 25220), ssl.SSLEOFError("EOF")])
+def test_retries_a_response_cut_off_while_reading(error):
+    calls = []
+
+    def opener(request, timeout):
+        calls.append(1)
+        return CutOff(error) if len(calls) == 1 else io.BytesIO(b'{"ok": true}')
+
+    assert Fetcher(opener=opener, sleep=lambda seconds: None).json("https://api.github.com/x") == {"ok": True}
+    assert len(calls) == 2
+
+
+def test_a_response_that_stays_cut_off_is_a_fetch_error():
+    def opener(request, timeout):
+        return CutOff(http.client.IncompleteRead(b"", 25220))
+
+    with pytest.raises(FetchError, match="25220 more expected"):
+        Fetcher(opener=opener, sleep=lambda seconds: None).json("https://api.github.com/x")
 
 
 def test_github_token_is_only_sent_to_github():
