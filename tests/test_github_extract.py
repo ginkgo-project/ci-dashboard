@@ -43,6 +43,26 @@ def test_jobs_and_their_pipelines(extracted):
     }
 
 
+def test_a_job_only_ci_extra_calls_stays_on_develop_if_it_also_runs_on_pushes(tmp_path, hw, env):
+    coverage = """  coverage:
+    if: >-
+      github.event_name != 'pull_request' || (
+      !contains(github.event.pull_request.labels.*.name, '1:ST:SKIP_ALL_CI') && (
+      (github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, '1:ST:run-full-test'))
+      || github.event.label.name == '1:ST:run-full-test'))
+    uses: ./.github/workflows/coverage.yml
+"""
+    root = fake_ginkgo.write(tmp_path / "ginkgo", {
+        **fake_ginkgo.FILES,
+        ".github/workflows/ci.yml": fake_ginkgo.CI.split("  coverage:")[0],
+        ".github/workflows/ci-extra.yml": fake_ginkgo.CI_EXTRA.split("  coverage:")[0] + coverage,
+    })
+    jobs, warnings = github.extract(root, hw, env)
+    assert warnings == []
+    job = next(job for job in jobs if job.key == "github:coverage / coverage of the reference, OpenMP and MPI code")
+    assert job.pipelines == ["develop", "pr-full"]
+
+
 def test_arm_build(extracted):
     jobs, _ = extracted
     job = jobs["github:arm / arm/omp/release/shared-16bit"]

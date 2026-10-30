@@ -62,11 +62,13 @@ def matrix_combinations(matrix, full: bool | None) -> list[dict]:
 
 def by_event(job: dict, pipelines: list[str]) -> list[str]:
     """The pipelines left by a condition on the event: pull requests only, e.g. clang-tidy
-    on the changed lines, or pushes only, e.g. coverage, which CI-Extra runs for
-    pull requests."""
+    on the changed lines; pushes only; or pushes as well as the workflow's pull requests,
+    e.g. coverage in CI-Extra, which the labels otherwise skip on pushes."""
     condition = str(job.get("if", "")).replace(" ", "")
     if "github.event_name=='pull_request'" in condition:
         return [p for p in pipelines if p != "develop"]
+    if "github.event_name!='pull_request'||" in condition:
+        return ["develop"] + [p for p in pipelines if p != "develop"]
     if "github.event_name!='pull_request'" in condition:
         return [p for p in pipelines if p == "develop"]
     return pipelines
