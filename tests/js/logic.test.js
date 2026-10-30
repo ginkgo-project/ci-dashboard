@@ -228,6 +228,14 @@ test("small helpers", () => {
   assert.equal(logic.shortSha(null), "");
 });
 
+test("formatTimestamp writes an ISO date and a 24-hour time in the local time zone", () => {
+  // the expected values are local times; the input is UTC, like generated_at
+  const utcString = (...local) => new Date(...local).toISOString();
+  assert.equal(logic.formatTimestamp(utcString(2026, 9, 30, 15, 4, 5)), "2026-10-30 15:04:05");
+  assert.equal(logic.formatTimestamp(utcString(2026, 0, 2, 0, 30, 9)), "2026-01-02 00:30:09");
+  assert.equal(logic.formatTimestamp("not a date"), "Invalid Date");
+});
+
 test("latestResult takes the newer of a develop result and a result elsewhere", () => {
   const horeka = {
     history: [result("manual"), result("success", { finished_at: "2026-10-04T10:00:00Z" })],

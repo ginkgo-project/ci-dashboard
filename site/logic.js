@@ -282,6 +282,15 @@ export function shortSha(sha) {
   return sha ? sha.slice(0, 10) : "";
 }
 
+// e.g. 2026-10-30 15:04:05, in the local time zone
+export function formatTimestamp(time) {
+  const date = new Date(time);
+  if (Number.isNaN(date.getTime())) return String(date);
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 export function formatDuration(seconds) {
   if (seconds === null || seconds === undefined) return "";
   const minutes = Math.round(seconds / 60);

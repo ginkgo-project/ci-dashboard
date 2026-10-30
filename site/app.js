@@ -2,7 +2,7 @@
 // through textContent (the el helper), so job names cannot inject markup.
 import {
   STATUS_ORDER, effectiveStatus, countSettings, statusRows, summary,
-  gridModel, chipLabel, supportedLines, ageLevel, shortSha, formatDuration, machineLabel, toolchainName,
+  gridModel, chipLabel, supportedLines, ageLevel, shortSha, formatTimestamp, formatDuration, machineLabel, toolchainName,
   tidyPulls, groupFindings, checkTotals, checkDocsUrl, findingUrl,
   coveragePulls, coverageHistory, chartModel, changedLinesText, formatChange, formatCount,
 } from "./logic.js";
@@ -66,7 +66,7 @@ function renderMeta() {
   const meta = document.getElementById("meta");
   if (status) {
     const level = ageLevel(status.generated_at);
-    meta.append(el("span", { class: `age ${level}` }, `Results from ${new Date(status.generated_at).toLocaleString()}`));
+    meta.append(el("span", { class: `age ${level}` }, `Results from ${formatTimestamp(status.generated_at)}`));
     if (level === "old") showBanner("error", "The job results are more than a day old: the update workflow may be failing or disabled.");
   }
   meta.append(el("span", {}, `CI configuration of develop at ${shortSha(coverage.ginkgo_commit) || "unknown commit"}`));
